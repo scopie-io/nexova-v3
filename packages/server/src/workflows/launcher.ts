@@ -37,13 +37,13 @@ export function workflowLauncher(engine: Engine): JobLauncher {
       await engine.jobs.save(job);
       return true;
     },
-    async *events(job, signal) {
+    async *events(job, signal, startIndex) {
       if (!job.runId) {
         yield { type: "done", jobId: job.id, job, at: new Date().toISOString() };
         return;
       }
       const run = getRun(job.runId);
-      const reader = run.getReadable({ startIndex: 0 }).getReader();
+      const reader = run.getReadable({ startIndex }).getReader();
       const onAbort = () => void reader.cancel().catch(() => undefined);
       signal.addEventListener("abort", onAbort, { once: true });
       let sawTerminal = false;

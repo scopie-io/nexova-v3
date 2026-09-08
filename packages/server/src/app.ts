@@ -26,8 +26,8 @@ export interface JobLauncher {
   id: string;
   create(raw: string, options: JobOptions, files: IncomingFile[]): Promise<JobRecord>;
   rebuild(slug: string, options: JobOptions): Promise<JobRecord>;
-  /** Every event so far, then live events until the job reaches a terminal state. */
-  events(job: JobRecord, signal: AbortSignal): AsyncIterable<JobEvent>;
+  /** Events from `startIndex` (0 = everything so far), then live events until the job reaches a terminal state. */
+  events(job: JobRecord, signal: AbortSignal, startIndex: number): AsyncIterable<JobEvent>;
   cancel(jobId: string): Promise<boolean>;
 }
 
@@ -107,8 +107,8 @@ export function inProcessLauncher(engine: Engine): JobLauncher {
     create: (raw, options, files) => engine.createStore(raw, options, files),
     rebuild: (slug, options) => engine.rebuildStore(slug, options),
     cancel: async (jobId) => engine.cancel(jobId),
-    async *events(job, signal) {
-      for (const e of engine.bus.replay(job.id)) yield e;
+    async *events(job, signal, startIndex) {
+      for (const e of engine.bus.replay(job.id).slice(startIndex)) yield e;
       if (!engine.isRunning(job.id)) {
         const latest = await engine.getJob(job.id);
         if (latest) yield { type: "done", jobId: job.id, job: latest, at: new Date().toISOString() };
@@ -215,13 +215,17 @@ export function createApp(opts: AppOptions): Hono {
     const id = c.req.param("id");
     const job = await engine.getJob(id);
     if (!job) return c.json({ error: "not found" }, 404);
+    // EventSource reconnects with Last-Event-ID after a timeout (hosted functions cap long streams);
+    // resume from the next event instead of replaying the whole run.
+    const last = Number.parseInt(c.req.header("last-event-id") ?? "", 10);
+    const startIndex = Number.isFinite(last) && last >= 0 ? last + 1 : 0;
     return streamSSE(c, async (stream) => {
-      let seq = 0;
+      let seq = startIndex;
       const abort = new AbortController();
       stream.onAbort(() => abort.abort());
       const heartbeat = setInterval(() => void stream.writeSSE({ event: "ping", data: "" }), 15_000);
       try {
-        for await (const e of launcher.events(job, abort.signal)) {
+        for await (const e of launcher.events(job, abort.signal, startIndex)) {
           await stream.writeSSE({ event: e.type, data: JSON.stringify(e), id: String(seq++) });
           if (abort.signal.aborted) break;
         }
