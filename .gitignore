@@ -13,3 +13,4 @@ Thumbs.db
 packages/server/src/templates.bundle.ts
 .workflow-data/
 .output/
+.env*
