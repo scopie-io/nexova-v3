@@ -13,6 +13,9 @@ import { UsageLedger } from "./claude/usage.js";
 import { loadConfig, type EngineConfig } from "./config.js";
 import { LocalDeployer } from "./generate/deploy/local.js";
 import { NetlifyDeployer } from "./generate/deploy/netlify.js";
+import { VercelDeployer } from "./generate/deploy/vercel.js";
+import { createStorage } from "./storage/index.js";
+import type { Storage } from "./storage/types.js";
 import type { Deployer } from "./generate/deploy/types.js";
 import { JobBus } from "./pipeline/events.js";
 import { JobStore } from "./pipeline/job-store.js";
@@ -33,6 +36,7 @@ export interface EngineOptions {
 
 export class Engine {
   readonly config: EngineConfig;
+  readonly storage: Storage;
   readonly ledger: UsageLedger;
   readonly registry: TemplateRegistry;
   readonly jobs: JobStore;
@@ -45,13 +49,14 @@ export class Engine {
 
   private constructor(opts: EngineOptions) {
     this.config = { ...loadConfig(opts.env ?? process.env, opts.rootDir ?? process.cwd()), ...(opts.config ?? {}) };
-    this.ledger = new UsageLedger(this.config);
+    this.storage = createStorage(this.config);
+    this.ledger = new UsageLedger(this.config, this.storage);
     this.registry = new TemplateRegistry(this.config);
-    this.jobs = new JobStore(this.config);
-    this.stores = new StoreRepository(this.config);
+    this.jobs = new JobStore(this.config, this.storage);
+    this.stores = new StoreRepository(this.config, this.storage);
     this.bus = new JobBus();
     this.gateway = opts.gateway ?? (this.config.offline ? new OfflineGateway() : new AnthropicGateway(this.config, this.ledger));
-    this.deployer = opts.deployer ?? (this.config.deployTarget === "netlify" && this.config.netlifyToken ? new NetlifyDeployer(this.config) : new LocalDeployer(this.config));
+    this.deployer = opts.deployer ?? (this.config.deployTarget === "netlify" && this.config.netlifyToken ? new NetlifyDeployer(this.config) : this.config.deployTarget === "vercel" && this.config.vercelToken ? new VercelDeployer(this.config) : new LocalDeployer(this.config));
   }
 
   static async create(opts: EngineOptions = {}): Promise<Engine> {
@@ -63,15 +68,14 @@ export class Engine {
   private async init(): Promise<void> {
     await ensureDir(this.config.storesDir);
     await ensureDir(this.config.dataDir);
-    await this.jobs.init();
-    await this.ledger.init();
+    await this.storage.init();
     const templates = await this.registry.list();
-    this.log.info(`engine ready`, { model: this.config.model, effort: this.config.effort, gateway: this.gateway.id, deployer: this.deployer.id, templates: templates.map((t) => t.manifest.id) });
+    this.log.info(`engine ready`, { model: this.config.model, effort: this.config.effort, gateway: this.gateway.id, deployer: this.deployer.id, storage: this.storage.id, templates: templates.map((t) => t.manifest.id) });
     if (this.config.offline) this.log.warn("running OFFLINE: no ANTHROPIC_API_KEY found, using heuristic gateway (lower quality). Set the key in .env to enable Claude.");
   }
 
   private deps(): PipelineDeps {
-    return { config: this.config, gateway: this.gateway, ledger: this.ledger, registry: this.registry, jobs: this.jobs, stores: this.stores, bus: this.bus, deployer: this.deployer };
+    return { config: this.config, gateway: this.gateway, ledger: this.ledger, registry: this.registry, jobs: this.jobs, stores: this.stores, bus: this.bus, deployer: this.deployer, storage: this.storage };
   }
 
   /** Create a job and start it in the background. Subscribe to events or await waitFor(). */
@@ -175,6 +179,10 @@ export { composeSite, themeCss, siteDirFor, assetsDirFor } from "./generate/comp
 export { buildSite } from "./generate/build.js";
 export { LocalDeployer, liveDirFor, localStoreUrl } from "./generate/deploy/local.js";
 export { NetlifyDeployer } from "./generate/deploy/netlify.js";
+export { VercelDeployer } from "./generate/deploy/vercel.js";
+export { createStorage, FsStorage, VercelStorage } from "./storage/index.js";
+export type { Storage } from "./storage/types.js";
+export { readRef } from "./util/refs.js";
 export type { Deployer, DeployInput, DeployResult } from "./generate/deploy/types.js";
 export { JobBus } from "./pipeline/events.js";
 export { JobStore } from "./pipeline/job-store.js";

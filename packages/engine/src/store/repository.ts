@@ -5,7 +5,7 @@
 import path from "node:path";
 import type { EngineConfig } from "../config.js";
 import { parseStoreSpec, type Product, type StoreSpec } from "../schema/store-spec.js";
-import { exists, listDirs, readJsonOrNull, writeJson } from "../util/fsx.js";
+import type { Storage } from "../storage/types.js";
 import { slugify, uniqueSlug } from "../util/ids.js";
 
 export interface StoreMeta {
@@ -21,36 +21,28 @@ export interface StoreMeta {
 }
 
 export class StoreRepository {
-  constructor(private readonly config: EngineConfig) {}
+  constructor(
+    private readonly config: EngineConfig,
+    private readonly storage: Storage,
+  ) {}
 
+  /** Local scratch folder for a store (composed site, built output). */
   dir(slug: string): string {
     return path.join(this.config.storesDir, slug);
   }
 
-  private specPath(slug: string): string {
-    return path.join(this.dir(slug), "store.json");
-  }
-
-  private metaPath(slug: string): string {
-    return path.join(this.dir(slug), "store.meta.json");
-  }
-
   async list(): Promise<StoreMeta[]> {
-    const out: StoreMeta[] = [];
-    for (const slug of await listDirs(this.config.storesDir)) {
-      const meta = await this.getMeta(slug);
-      if (meta) out.push(meta);
-    }
-    return out.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    const entries = await this.storage.list<StoreMeta>("store-meta");
+    return entries.map((e) => e.value).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
   async exists(slug: string): Promise<boolean> {
-    return exists(this.specPath(slug));
+    return (await this.storage.get("stores", slug)) != null;
   }
 
   async getSpec(slug: string): Promise<StoreSpec | null> {
     if (!/^[a-z0-9-]+$/.test(slug)) return null;
-    const raw = await readJsonOrNull(this.specPath(slug));
+    const raw = await this.storage.get("stores", slug);
     if (!raw) return null;
     const parsed = parseStoreSpec(raw);
     return parsed;
@@ -58,23 +50,24 @@ export class StoreRepository {
 
   async saveSpec(spec: StoreSpec): Promise<void> {
     spec.meta.updatedAt = new Date().toISOString();
-    await writeJson(this.specPath(spec.slug), spec);
+    await this.storage.put("stores", spec.slug, spec);
     const meta = (await this.getMeta(spec.slug)) ?? { slug: spec.slug, name: spec.brand.name, templateId: spec.template.id, siteUrl: null, jobId: null, builtAt: null, updatedAt: spec.meta.updatedAt, products: spec.catalog.products.length, deployProvider: null };
     meta.name = spec.brand.name;
     meta.templateId = spec.template.id ?? meta.templateId;
     meta.products = spec.catalog.products.length;
     meta.updatedAt = spec.meta.updatedAt;
-    await writeJson(this.metaPath(spec.slug), meta);
+    await this.storage.put("store-meta", spec.slug, meta);
   }
 
   async getMeta(slug: string): Promise<StoreMeta | null> {
-    return readJsonOrNull<StoreMeta>(this.metaPath(slug));
+    if (!/^[a-z0-9-]+$/.test(slug)) return null;
+    return this.storage.get<StoreMeta>("store-meta", slug);
   }
 
   async updateMeta(slug: string, patch: Partial<StoreMeta>): Promise<StoreMeta> {
     const current = (await this.getMeta(slug)) ?? { slug, name: slug, templateId: null, siteUrl: null, jobId: null, builtAt: null, updatedAt: new Date().toISOString(), products: 0, deployProvider: null };
     const next = { ...current, ...patch, updatedAt: new Date().toISOString() };
-    await writeJson(this.metaPath(slug), next);
+    await this.storage.put("store-meta", slug, next);
     return next;
   }
 
@@ -83,7 +76,7 @@ export class StoreRepository {
     const base = slugify(preferred || brandName, "store");
     // An explicitly requested slug is honored even if it exists (the merchant is regenerating that store).
     if (preferred) return base;
-    const taken = new Set(await listDirs(this.config.storesDir));
+    const taken = new Set([...(await this.storage.keys("stores")), ...(await this.storage.keys("store-meta"))]);
     return uniqueSlug(base, taken);
   }
 

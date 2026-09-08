@@ -26,6 +26,7 @@ import { Engine, loadDotEnv, liveDirFor, parseStoreSpec, type IncomingFile, type
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(here, "..", "..", "..");
+await loadDotEnv(rootDir, ".env.local");
 await loadDotEnv(rootDir);
 
 const engine = await Engine.create({ rootDir });

@@ -2,6 +2,7 @@ import path from "node:path";
 
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 export type ReaderMode = "auto" | "off" | "jina" | "firecrawl" | "proxy";
+export type StorageMode = "fs" | "vercel";
 
 export interface EngineConfig {
   /** Absolute path of the project root (where templates/, stores/, data/ live by default). */
@@ -27,7 +28,7 @@ export interface EngineConfig {
   browser: boolean;
   /** Public base URL for reporting live store links. */
   publicUrl: string;
-  deployTarget: "local" | "netlify";
+  deployTarget: "local" | "netlify" | "vercel";
   netlifyToken: string | null;
   /** Per-source fetch timeout. */
   fetchTimeoutMs: number;
@@ -61,6 +62,15 @@ export interface EngineConfig {
   tiktokShopMaxPages: number;
   /** Products per shop enriched with full details (photos, description, variants, stock); one credit each. */
   tiktokShopDetails: number;
+
+  // ---- storage ----
+  /** Where state lives: "fs" (data/ and stores/ on disk) or "vercel" (Neon Postgres + Vercel Blob). */
+  storage: StorageMode;
+  databaseUrl: string | null;
+  blobToken: string | null;
+  /** Vercel access token + team for publishing stores through the Deployments API. */
+  vercelToken: string | null;
+  vercelTeamId: string | null;
 }
 
 const EFFORTS: Effort[] = ["low", "medium", "high", "xhigh", "max"];
@@ -89,7 +99,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, rootDir = proce
     cacheTtlHours: clampInt(env.NEXOVA_CACHE_TTL_HOURS, 24, 0, 24 * 30),
     browser: env.NEXOVA_BROWSER === "1",
     publicUrl: (env.NEXOVA_PUBLIC_URL || `http://localhost:${env.PORT || 4000}`).replace(/\/+$/, ""),
-    deployTarget: env.NEXOVA_DEPLOY_TARGET === "netlify" ? "netlify" : "local",
+    deployTarget: env.NEXOVA_DEPLOY_TARGET === "netlify" ? "netlify" : env.NEXOVA_DEPLOY_TARGET === "vercel" ? "vercel" : "local",
     netlifyToken: env.NETLIFY_AUTH_TOKEN?.trim() || null,
     fetchTimeoutMs: clampInt(env.NEXOVA_FETCH_TIMEOUT_MS, 15_000, 1000, 120_000),
     researchTimeoutMs: clampInt(env.NEXOVA_RESEARCH_TIMEOUT_MS, 10 * 60_000, 30_000, 60 * 60_000),
@@ -107,6 +117,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, rootDir = proce
     tiktokShopRegions: (env.NEXOVA_TIKTOK_SHOP_REGIONS || "MY,SG,US").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean),
     tiktokShopMaxPages: clampInt(env.NEXOVA_TIKTOK_SHOP_MAX_PAGES, 3, 1, 25),
     tiktokShopDetails: clampInt(env.NEXOVA_TIKTOK_SHOP_DETAILS, 6, 0, 60),
+    storage: (() => {
+      const raw = (env.NEXOVA_STORAGE || "auto").toLowerCase();
+      const cloud = !!env.DATABASE_URL?.trim() && !!env.BLOB_READ_WRITE_TOKEN?.trim();
+      if (raw === "vercel") return "vercel";
+      if (raw === "fs") return "fs";
+      return cloud ? "vercel" : "fs";
+    })(),
+    databaseUrl: env.DATABASE_URL?.trim() || null,
+    blobToken: env.BLOB_READ_WRITE_TOKEN?.trim() || null,
+    vercelToken: env.VERCEL_TOKEN?.trim() || null,
+    vercelTeamId: env.VERCEL_TEAM_ID?.trim() || null,
   };
 }
 

@@ -26,6 +26,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",
+    "@neondatabase/serverless": "^1.1.0",
+    "@vercel/blob": "^2.8.0",
     "cheerio": "^1.2.0",
     "sharp": "^0.35.4",
     "zod": "^4.5.4"

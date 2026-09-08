@@ -1,18 +1,22 @@
 /**
- * Job persistence: data/jobs/<id>/job.json plus step artifacts and attachments, so jobs survive
- * restarts and every intermediate (ingest, research, drafts, spec) can be inspected or replayed.
+ * Job persistence: the job record, its step artifacts, attachments and log, through Storage so
+ * jobs survive restarts and every intermediate (ingest, research, drafts, spec) can be inspected
+ * or replayed. On disk this is data/jobs/<id>/; on Vercel it is Neon + Blob.
  */
 import path from "node:path";
-import { promises as fs } from "node:fs";
 import type { EngineConfig } from "../config.js";
 import { emptyUsage, initialSteps, type JobOptions, type JobRecord } from "../schema/job.js";
 import { saveAttachments, type IncomingFile } from "../ingest/attachments.js";
-import { appendLine, ensureDir, listDirs, readJsonOrNull, writeJson, writeText } from "../util/fsx.js";
+import type { Storage } from "../storage/types.js";
 import { newId } from "../util/ids.js";
 
 export class JobStore {
-  constructor(private readonly config: EngineConfig) {}
+  constructor(
+    private readonly config: EngineConfig,
+    private readonly storage: Storage,
+  ) {}
 
+  /** Scratch directory for a job (browser captures, composed sites). Always local disk (or /tmp on Vercel). */
   dir(id: string): string {
     return path.join(this.config.dataDir, "jobs", id);
   }
@@ -24,7 +28,7 @@ export class JobStore {
   async create(raw: string, options: JobOptions = {}, files: IncomingFile[] = []): Promise<JobRecord> {
     const now = new Date().toISOString();
     const id = newId("job");
-    const attachments = files.length ? await saveAttachments(files, path.join(this.dir(id), "attachments")) : [];
+    const attachments = files.length ? await saveAttachments(files, { storage: this.storage, keyPrefix: `attachments/${id}` }) : [];
     const job: JobRecord = {
       id,
       status: "queued",
@@ -45,52 +49,40 @@ export class JobStore {
 
   async save(job: JobRecord): Promise<void> {
     job.updatedAt = new Date().toISOString();
-    await writeJson(path.join(this.dir(job.id), "job.json"), job);
+    await this.storage.put("jobs", job.id, job);
   }
 
   async get(id: string): Promise<JobRecord | null> {
     if (!/^[a-z0-9_]+$/i.test(id)) return null;
-    const job = await readJsonOrNull<JobRecord>(path.join(this.dir(id), "job.json"));
+    const job = await this.storage.get<JobRecord>("jobs", id);
     if (job && !job.input.attachments) job.input.attachments = [];
     return job;
   }
 
   async list(limit = 50): Promise<JobRecord[]> {
-    const ids = await listDirs(path.join(this.config.dataDir, "jobs"));
-    const jobs: JobRecord[] = [];
-    for (const id of ids) {
-      const j = await this.get(id);
-      if (j) jobs.push(j);
-    }
-    return jobs.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+    const entries = await this.storage.list<JobRecord>("jobs", { limit: Math.max(limit, 200) });
+    return entries
+      .map((e) => e.value)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
   }
 
   async putArtifact(job: JobRecord, name: string, data: unknown): Promise<string> {
-    const file = name.includes(".") ? name : `${name}.json`;
-    const p = path.join(this.dir(job.id), file);
-    if (typeof data === "string") await writeText(p, data);
-    else await writeJson(p, data);
-    job.artifacts[name] = file;
-    return p;
+    await this.storage.put(`artifacts/${job.id}`, name, data);
+    job.artifacts[name] = name.includes(".") ? name : `${name}.json`;
+    return name;
   }
 
   async getArtifact<T = unknown>(job: JobRecord, name: string): Promise<T | null> {
-    const file = job.artifacts[name];
-    if (!file) return null;
-    const p = path.join(this.dir(job.id), file);
-    if (file.endsWith(".json")) return readJsonOrNull<T>(p);
-    try {
-      return (await fs.readFile(p, "utf8")) as unknown as T;
-    } catch {
-      return null;
-    }
+    if (!job.artifacts[name]) return null;
+    return this.storage.get<T>(`artifacts/${job.id}`, name);
   }
 
   async appendLog(job: JobRecord, line: string): Promise<void> {
-    await appendLine(path.join(this.dir(job.id), "log.txt"), line);
+    await this.storage.append(`joblog/${job.id}`, line);
   }
 
   async init(): Promise<void> {
-    await ensureDir(path.join(this.config.dataDir, "jobs"));
+    await this.storage.init();
   }
 }

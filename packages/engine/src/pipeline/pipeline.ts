@@ -17,13 +17,14 @@ import { assemble, captureAttachments, ingestUrls, processAttachments, runDiscov
 import { coverageSummary } from "../ingest/coverage.js";
 import { localizeAssets } from "../generate/assets.js";
 import { buildSite } from "../generate/build.js";
-import { assetsDirFor, composeSite, siteDirFor } from "../generate/compose.js";
+import { composeSite, siteDirFor } from "../generate/compose.js";
 import type { Deployer } from "../generate/deploy/types.js";
 import type { StoreDraft, ProductDraft } from "../schema/drafts.js";
 import type { JobRecord, StepName, StepState } from "../schema/job.js";
 import type { TemplateEntry } from "../schema/manifest.js";
 import type { AttachmentExtract, DetectedUrl, IngestInput, IngestResult, RawProduct, ResearchFindings, SourceSignals } from "../schema/signals.js";
 import { parseStoreSpec, type SourceRecord, type StoreSpec } from "../schema/store-spec.js";
+import type { Storage } from "../storage/types.js";
 import type { StoreRepository } from "../store/repository.js";
 import type { TemplateRegistry } from "../templates/registry.js";
 import { addLogSink, createLogger, errorMessage, type Logger } from "../util/log.js";
@@ -41,6 +42,7 @@ export interface PipelineDeps {
   stores: StoreRepository;
   bus: JobBus;
   deployer: Deployer;
+  storage: Storage;
 }
 
 /** Products per normalization call. Kept modest so one batch's JSON stays inside the output budget. */
@@ -79,7 +81,7 @@ export async function runJob(jobId: string, deps: PipelineDeps, signal: AbortSig
   });
 
   const ctx = new StepContext(job, deps, log, signal);
-  const ingestOpts = () => ({ config: deps.config, log: log.child("ingest"), signal, captureDir: deps.jobs.captureDir(job.id), jobId: job.id });
+  const ingestOpts = () => ({ config: deps.config, log: log.child("ingest"), signal, storage: deps.storage, captureDir: deps.jobs.captureDir(job.id), jobId: job.id });
   try {
     await ctx.setStatus("running");
     const state: PipelineState = { sources: [], discovered: [], attachmentExtracts: [] };
@@ -191,7 +193,7 @@ export async function runJob(jobId: string, deps: PipelineDeps, signal: AbortSig
 
     await ctx.step("assets", async () => {
       const referer = state.ingest?.sources[0]?.url ?? null;
-      const result = await localizeAssets(state.spec!, assetsDirFor(deps.config, job.slug!), { log: log.child("assets"), signal, referer });
+      const result = await localizeAssets(state.spec!, { storage: deps.storage, slug: job.slug!, log: log.child("assets"), signal, referer });
       state.spec = result.spec;
       state.imagePaths = result.representative;
       return `${result.downloaded} images downloaded, ${result.skipped} reused, ${result.failed} failed`;
@@ -226,7 +228,7 @@ export async function runJob(jobId: string, deps: PipelineDeps, signal: AbortSig
     });
 
     await ctx.step("compose", async () => {
-      const basePath = `/s/${job.slug}/`;
+      const basePath = deps.deployer.basePath(job.slug!);
       const spec = parseStoreSpec(state.spec!);
       await deps.stores.saveSpec(spec);
       await deps.stores.updateMeta(spec.slug, { jobId: job.id, templateId: state.template!.manifest.id });
@@ -303,7 +305,7 @@ export async function runRebuild(jobId: string, slug: string, deps: PipelineDeps
       return `${entry.manifest.id}`;
     });
     await ctx.step("compose", async () => {
-      const basePath = `/s/${slug}/`;
+      const basePath = deps.deployer.basePath(slug);
       await deps.stores.saveSpec(state.spec!);
       const result = await composeSite({ spec: state.spec!, template: state.template!, config: deps.config, log: log.child("compose"), basePath });
       state.siteDir = result.siteDir;

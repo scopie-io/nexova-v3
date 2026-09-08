@@ -8,6 +8,8 @@
  *   ingest()            convenience: all of the above for callers outside the pipeline
  */
 import type { EngineConfig } from "../config.js";
+import { createStorage } from "../storage/index.js";
+import type { Storage } from "../storage/types.js";
 import { emptySignals, type Attachment, type AttachmentExtract, type DetectedUrl, type IngestInput, type IngestResult, type RawProduct, type SourceSignals } from "../schema/signals.js";
 import { rawProductsFromTexts } from "../claude/mapping.js";
 import { errorMessage, type Logger } from "../util/log.js";
@@ -30,6 +32,8 @@ import { waybackProvider } from "./providers/wayback.js";
 export interface IngestOptions {
   config: EngineConfig;
   log: Logger;
+  /** Where the source cache lives; defaults to the backend selected by config. */
+  storage?: Storage;
   signal?: AbortSignal;
   providers?: Provider[];
   onSource?: (s: SourceSignals) => void;
@@ -45,7 +49,7 @@ export function defaultProviders(): Provider[] {
 
 export async function ingestUrls(urls: DetectedUrl[], opts: IngestOptions, meta: { discovered?: boolean; discoveredFrom?: Map<string, string> } = {}): Promise<SourceSignals[]> {
   const providers = opts.providers ?? defaultProviders();
-  const cache = new SourceCache(opts.config);
+  const cache = new SourceCache(opts.config, opts.storage ?? createStorage(opts.config));
   const ctx: ProviderContext = { config: opts.config, log: opts.log, signal: opts.signal, captureDir: opts.captureDir, jobId: opts.jobId };
 
   const results = await mapLimit(urls, 3, async (det) => {

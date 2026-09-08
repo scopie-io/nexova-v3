@@ -113,7 +113,7 @@ export interface Attachment {
   name: string;
   mime: string;
   kind: AttachmentKind;
-  /** Absolute path on disk. */
+  /** Storage ref: an absolute path on disk, or an https URL when files live in Blob. Read with readRef(). */
   path: string;
   size: number;
   /** "user" for uploads, "capture" for browser screenshots taken by the engine. */

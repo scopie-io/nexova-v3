@@ -204,6 +204,44 @@ const EXT_BY_TYPE: Record<string, string> = {
   "image/svg+xml": ".svg",
 };
 
+export interface FetchImageResult {
+  ok: boolean;
+  data: Buffer | null;
+  contentType: string | null;
+  /** File extension for the content type, e.g. ".webp". */
+  ext: string;
+  error: string | null;
+}
+
+/** Fetch a remote image into memory (size- and type-checked). */
+export async function fetchImage(url: string, opts: { timeoutMs?: number; maxBytes?: number; referer?: string; signal?: AbortSignal } = {}): Promise<FetchImageResult> {
+  const timeoutMs = opts.timeoutMs ?? 20_000;
+  const maxBytes = opts.maxBytes ?? 8 * 1024 * 1024;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(new Error("timeout")), timeoutMs);
+  const onAbort = () => ac.abort(new Error("cancelled"));
+  opts.signal?.addEventListener("abort", onAbort, { once: true });
+  try {
+    const res = await fetch(url, {
+      redirect: "follow",
+      signal: ac.signal,
+      headers: { "user-agent": DESKTOP_UA, accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8", ...(opts.referer ? { referer: opts.referer } : {}) },
+    });
+    if (!res.ok) return { ok: false, data: null, contentType: null, ext: "", error: `HTTP ${res.status}` };
+    const contentType = (res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+    if (!contentType.startsWith("image/")) return { ok: false, data: null, contentType, ext: "", error: `not an image (${contentType || "unknown"})` };
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.byteLength === 0) return { ok: false, data: null, contentType, ext: "", error: "empty body" };
+    if (buf.byteLength > maxBytes) return { ok: false, data: null, contentType, ext: "", error: "too large" };
+    return { ok: true, data: buf, contentType, ext: EXT_BY_TYPE[contentType] ?? ".img", error: null };
+  } catch (err) {
+    return { ok: false, data: null, contentType: null, ext: "", error: err instanceof Error ? err.message : String(err) };
+  } finally {
+    clearTimeout(timer);
+    opts.signal?.removeEventListener("abort", onAbort);
+  }
+}
+
 /** Download a remote image into destDir. Returns the final path (extension by content type). */
 export async function downloadImage(url: string, destDir: string, baseName: string, opts: { timeoutMs?: number; maxBytes?: number; referer?: string; signal?: AbortSignal } = {}): Promise<DownloadResult> {
   const timeoutMs = opts.timeoutMs ?? 20_000;

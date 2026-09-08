@@ -20,6 +20,10 @@ export class LocalDeployer implements Deployer {
   readonly id = "local";
   constructor(private readonly config: EngineConfig) {}
 
+  basePath(slug: string): string {
+    return `/s/${slug}/`;
+  }
+
   async deploy(input: DeployInput): Promise<DeployResult> {
     const live = liveDirFor(this.config, input.slug);
     const staging = `${live}.next`;

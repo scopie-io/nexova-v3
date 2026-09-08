@@ -15,6 +15,10 @@ export class NetlifyDeployer implements Deployer {
   readonly id = "netlify";
   constructor(private readonly config: EngineConfig) {}
 
+  basePath(_slug: string): string {
+    return "/";
+  }
+
   private async api<T>(method: string, route: string, body?: unknown, raw?: Buffer): Promise<T> {
     const token = this.config.netlifyToken;
     if (!token) throw new Error("NETLIFY_AUTH_TOKEN is not set");

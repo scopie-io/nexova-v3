@@ -2,11 +2,11 @@
  * Attachments: screenshots (TikTok Shop, Shopee, Instagram grids, WhatsApp catalogs), CSV/TSV/JSON
  * product exports, price lists. Spreadsheets are parsed locally; images go to Claude vision.
  */
-import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Attachment, AttachmentExtract, AttachmentKind, RawProduct } from "../schema/signals.js";
-import { ensureDir } from "../util/fsx.js";
+import type { Storage } from "../storage/types.js";
 import { newId, slugify } from "../util/ids.js";
+import { readRef } from "../util/refs.js";
 import { guessCurrencyFromText, parsePrice } from "../util/text.js";
 
 export interface IncomingFile {
@@ -39,9 +39,9 @@ export function mimeFor(kind: AttachmentKind, name: string, mime: string): strin
   return mime || "application/octet-stream";
 }
 
-/** Persist uploaded files under a job directory and describe them. */
-export async function saveAttachments(files: IncomingFile[], dir: string, origin: Attachment["origin"] = "user"): Promise<Attachment[]> {
-  await ensureDir(dir);
+/** Persist uploaded files (under `<keyPrefix>/<id>-<name>` in storage) and describe them. `path` is a storage ref. */
+export async function saveAttachments(files: IncomingFile[], opts: { storage: Storage; keyPrefix: string; origin?: Attachment["origin"] }): Promise<Attachment[]> {
+  const origin = opts.origin ?? "user";
   const out: Attachment[] = [];
   for (const f of files.slice(0, MAX_ATTACHMENTS)) {
     if (!f.data || f.data.byteLength === 0 || f.data.byteLength > MAX_ATTACHMENT_BYTES) continue;
@@ -49,9 +49,9 @@ export async function saveAttachments(files: IncomingFile[], dir: string, origin
     if (kind === "other") continue;
     const id = newId("att");
     const safeName = slugify(path.basename(f.name, path.extname(f.name)), "file").slice(0, 40) + (path.extname(f.name).toLowerCase() || (kind === "image" ? ".png" : ""));
-    const dest = path.join(dir, `${id}-${safeName}`);
-    await fs.writeFile(dest, f.data);
-    out.push({ id, name: f.name, mime: mimeFor(kind, f.name, f.mime), kind, path: dest, size: f.data.byteLength, origin });
+    const mime = mimeFor(kind, f.name, f.mime);
+    const { ref } = await opts.storage.putBytes(`${opts.keyPrefix}/${id}-${safeName}`, f.data, { contentType: mime });
+    out.push({ id, name: f.name, mime, kind, path: ref, size: f.data.byteLength, origin });
   }
   return out;
 }
@@ -185,7 +185,9 @@ export async function extractLocalAttachments(attachments: Attachment[]): Promis
   for (const a of attachments) {
     if (a.kind !== "csv" && a.kind !== "json" && a.kind !== "text") continue;
     try {
-      const text = await fs.readFile(a.path, "utf8");
+      const bytes = await readRef(a.path);
+      if (!bytes) throw new Error("attachment could not be read");
+      const text = bytes.toString("utf8");
       let products: RawProduct[] = [];
       let via: AttachmentExtract["via"] = "text";
       if (a.kind === "csv") {

@@ -8,8 +8,8 @@
  *
  * Claude downsamples anything larger than ~1568px on the long edge, so that is the target.
  */
-import { promises as fs } from "node:fs";
 import sharp, { type Metadata } from "sharp";
+import { readRef } from "../util/refs.js";
 
 export const VISION_LONG_EDGE = 1568;
 /** Hard ceiling for one image payload (base64 chars) with headroom under the API's 5MB limit. */
@@ -41,14 +41,10 @@ export interface PrepareResult {
  * Turn an image file into one or more vision-ready tiles.
  * Returns an empty tile list (with a note) when the file cannot be read as an image.
  */
-export async function prepareForVision(filePath: string, opts: { maxTiles?: number } = {}): Promise<PrepareResult> {
+export async function prepareForVision(source: string | Buffer, opts: { maxTiles?: number } = {}): Promise<PrepareResult> {
   const maxTiles = Math.max(1, Math.min(opts.maxTiles ?? MAX_TILES, MAX_TILES));
-  let input: Buffer;
-  try {
-    input = await fs.readFile(filePath);
-  } catch (err) {
-    return { tiles: [], originalWidth: 0, originalHeight: 0, note: `unreadable file: ${err instanceof Error ? err.message : String(err)}` };
-  }
+  const input = Buffer.isBuffer(source) ? source : await readRef(source);
+  if (!input) return { tiles: [], originalWidth: 0, originalHeight: 0, note: `unreadable image: ${typeof source === "string" ? source.slice(0, 120) : "empty buffer"}` };
   let meta: Metadata;
   try {
     meta = await sharp(input).metadata();

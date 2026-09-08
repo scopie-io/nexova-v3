@@ -87,6 +87,7 @@ function printEvent(e: JobEvent): void {
 }
 
 async function main(): Promise<void> {
+  await loadDotEnv(process.cwd(), ".env.local");
   await loadDotEnv();
   const args = parseArgs(process.argv.slice(2));
   if (args.flags.offline) process.env.NEXOVA_OFFLINE = "1";
@@ -123,8 +124,8 @@ async function main(): Promise<void> {
       const det = detectInput(raw);
       const files = await readAttachments(list(args.flags.attach));
       const probeDir = path.join(engine.config.dataDir, "probe", String(Date.now()));
-      const attachments = files.length ? await (await import("./ingest/attachments.js")).saveAttachments(files, path.join(probeDir, "attachments")) : [];
-      const result = await ingest({ ...det, attachments }, { config: engine.config, log: createLogger("probe"), captureDir: path.join(probeDir, "captures"), onProgress: (m) => process.stdout.write(`\r  ${m.slice(0, 110).padEnd(110)}`) }, engine.config.offline ? undefined : (images) => engine.gateway.extractFromAttachments({ images, context: raw }, { jobId: null, onProgress: (m) => process.stdout.write(`\r  ${m.slice(0, 110).padEnd(110)}`) }));
+      const attachments = files.length ? await (await import("./ingest/attachments.js")).saveAttachments(files, { storage: engine.storage, keyPrefix: `attachments/${path.basename(probeDir)}` }) : [];
+      const result = await ingest({ ...det, attachments }, { config: engine.config, log: createLogger("probe"), storage: engine.storage, captureDir: path.join(probeDir, "captures"), onProgress: (m) => process.stdout.write(`\r  ${m.slice(0, 110).padEnd(110)}`) }, engine.config.offline ? undefined : (images) => engine.gateway.extractFromAttachments({ images, context: raw }, { jobId: null, onProgress: (m) => process.stdout.write(`\r  ${m.slice(0, 110).padEnd(110)}`) }));
       process.stdout.write("\n");
       for (const s of result.coverage.sources) console.log(`${s.platform.padEnd(11)} ${s.kind.padEnd(8)} ${s.status.padEnd(8)} products ${String(s.products).padStart(3)}  profile ${s.profile ? "yes" : "no "}  contacts ${s.contacts ? "yes" : "no "}  via ${s.strategies.join(",") || "-"}  tried ${s.attempted.join(",")}${s.discovered ? "  (discovered)" : ""}${s.note ? `\n             ${s.note}` : ""}`);
       for (const a of result.attachments) console.log(`attachment  ${a.name.padEnd(24)} ${a.via.padEnd(7)} ${a.platformGuess}/${a.pageType} products ${String(a.products.length).padStart(3)} conf ${a.confidence}${a.shopName ? ` shop="${a.shopName}"` : ""}${a.contacts.whatsapp ? ` wa=${a.contacts.whatsapp}` : ""}${a.notes ? ` — ${a.notes.slice(0, 80)}` : ""}`);
@@ -149,7 +150,8 @@ async function main(): Promise<void> {
       console.log(`  wayback       ${c.wayback ? "on" : "off"}`);
       console.log(`  vision images ${c.maxVisionImages}/job`);
       console.log(`  max products  ${c.maxProducts}`);
-      console.log(`  deploy        ${engine.deployer.id} -> ${c.publicUrl}`);
+      console.log(`  storage       ${engine.storage.id}${engine.storage.id === "vercel" ? " (Neon + Blob)" : ` (${c.dataDir})`}`);
+      console.log(`  deploy        ${engine.deployer.id} -> ${engine.deployer.id === "local" ? c.publicUrl : engine.deployer.id === "vercel" ? "nexova-<slug>.vercel.app" : "netlify"}`);
       console.log(`  templates     ${templates.length ? templates.map((t) => t.manifest.id).join(", ") : "NONE (add folders under " + c.templatesDir + ")"}`);
       if (c.offline) {
         console.log("\n✖ No usable ANTHROPIC_API_KEY found. Add it to .env, then run doctor again.");

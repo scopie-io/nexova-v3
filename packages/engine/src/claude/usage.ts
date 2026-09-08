@@ -2,11 +2,9 @@
  * Usage ledger: every Claude call is appended to data/usage/ledger.jsonl with token counts
  * and an estimated cost, so spend can be audited per job, per step, per model, per day.
  */
-import path from "node:path";
-import { promises as fs } from "node:fs";
 import type { EngineConfig } from "../config.js";
 import { emptyUsage, type UsageSummary } from "../schema/job.js";
-import { appendLine, ensureDir } from "../util/fsx.js";
+import type { Storage } from "../storage/types.js";
 import { estimateCostUsd } from "./pricing.js";
 
 export interface UsageLike {
@@ -58,12 +56,12 @@ function add(target: UsageSummary, e: LedgerEntry): UsageSummary {
 }
 
 export class UsageLedger {
-  private readonly file: string;
   private readonly listeners = new Set<(entry: LedgerEntry) => void>();
 
-  constructor(private readonly config: EngineConfig) {
-    this.file = path.join(config.dataDir, "usage", "ledger.jsonl");
-  }
+  constructor(
+    private readonly config: EngineConfig,
+    private readonly storage: Storage,
+  ) {}
 
   onEntry(fn: (entry: LedgerEntry) => void): () => void {
     this.listeners.add(fn);
@@ -92,7 +90,7 @@ export class UsageLedger {
       stopReason: params.stopReason ?? null,
       costUsd: estimateCostUsd(model, counts),
     };
-    await appendLine(this.file, JSON.stringify(entry));
+    await this.storage.append("usage", JSON.stringify(entry));
     for (const l of this.listeners) {
       try {
         l(entry);
@@ -104,14 +102,8 @@ export class UsageLedger {
   }
 
   async entries(filter: { jobId?: string; since?: Date } = {}): Promise<LedgerEntry[]> {
-    let raw = "";
-    try {
-      raw = await fs.readFile(this.file, "utf8");
-    } catch {
-      return [];
-    }
     const out: LedgerEntry[] = [];
-    for (const line of raw.split("\n")) {
+    for (const line of await this.storage.lines("usage")) {
       if (!line.trim()) continue;
       try {
         const e = JSON.parse(line) as LedgerEntry;
@@ -139,7 +131,7 @@ export class UsageLedger {
   }
 
   async init(): Promise<void> {
-    await ensureDir(path.dirname(this.file));
+    await this.storage.init();
   }
 }
 
