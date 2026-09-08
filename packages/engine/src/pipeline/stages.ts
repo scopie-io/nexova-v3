@@ -14,7 +14,7 @@ import type { GatewayContext } from "../claude/gateway.js";
 import { NexovaError } from "../claude/gateway.js";
 import { applyEnrichment, buildSpec, evidenceFromSignals } from "../claude/mapping.js";
 import { chooseTemplateByRules } from "../claude/offline-gateway.js";
-import { CURRENCY_BY_REGION, LOCALE_BY_REGION, detectInput } from "../ingest/detect.js";
+import { CURRENCY_BY_REGION, LOCALE_BY_REGION, detectInput, expandShortLinks } from "../ingest/detect.js";
 import { assemble, captureAttachments, ingestUrls, processAttachments, runDiscovery } from "../ingest/ingest.js";
 import { coverageSummary } from "../ingest/coverage.js";
 import { localizeAssets } from "../generate/assets.js";
@@ -146,7 +146,7 @@ export async function skipStep(ctx: StageContext, name: StepName, reason: string
 
 export async function stageDetect(ctx: StageContext): Promise<StepOutcome> {
   const { job, deps } = ctx;
-  const det = detectInput(job.input.raw);
+  const det = await expandShortLinks(detectInput(job.input.raw), { timeoutMs: deps.config.fetchTimeoutMs, signal: ctx.signal });
   const input: IngestInput = { ...det, attachments: job.input.attachments ?? [] };
   if (input.urls.length === 0 && input.texts.length === 0 && input.attachments.length === 0) throw new StepFailure("detect", "Paste at least one link (TikTok, Instagram, Shopee, Facebook, Lazada, Shopify or a website), a product list, or attach screenshots.");
   await deps.jobs.putArtifact(job, "input", input);

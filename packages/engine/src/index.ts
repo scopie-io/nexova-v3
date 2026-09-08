@@ -157,7 +157,7 @@ export * from "./schema/job.js";
 export * from "./schema/manifest.js";
 export type * from "./schema/signals.js";
 export type * from "./schema/drafts.js";
-export { detectInput, classifyUrl, platformLabel, CURRENCY_BY_REGION } from "./ingest/detect.js";
+export { detectInput, classifyUrl, expandShortLinks, platformLabel, CURRENCY_BY_REGION } from "./ingest/detect.js";
 export { ingest, ingestUrls, runDiscovery, processAttachments, assemble, summarizeSignalsForPrompt, defaultProviders } from "./ingest/ingest.js";
 export type { Provider, ProviderContext } from "./ingest/providers/types.js";
 export { discoverSources, candidatesFromLinks, handleMatches, isBioLinkHost } from "./ingest/discover.js";

@@ -244,6 +244,53 @@ export function detectInput(raw: string): IngestInput {
   return { raw, urls, texts, attachments: [] };
 }
 
+const SHORT_HOSTS = /^(vt|vm)\.tiktok\.com$/i;
+
+/**
+ * Links copied from the TikTok app are short links (vt.tiktok.com/...) that redirect to a video,
+ * a profile or a TikTok Shop product page. Follow the redirect once and re-classify, so a shop
+ * product shared from the app is read as a shop product rather than a video.
+ */
+export async function expandShortLinks(input: IngestInput, opts: { timeoutMs?: number; signal?: AbortSignal } = {}): Promise<IngestInput> {
+  const urls: DetectedUrl[] = [];
+  const seen = new Set<string>();
+  for (const det of input.urls) {
+    let next = det;
+    if (SHORT_HOSTS.test(hostnameOf(det.url))) {
+      const target = await resolveRedirect(det.url, opts);
+      const re = target ? classifyUrl(target) : null;
+      if (re) next = { ...re, url: re.url };
+    }
+    if (seen.has(next.url)) continue;
+    seen.add(next.url);
+    urls.push(next);
+  }
+  return { ...input, urls };
+}
+
+async function resolveRedirect(url: string, opts: { timeoutMs?: number; signal?: AbortSignal }): Promise<string | null> {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(new Error("timeout")), opts.timeoutMs ?? 10_000);
+  const onAbort = () => ac.abort(new Error("cancelled"));
+  opts.signal?.addEventListener("abort", onAbort, { once: true });
+  try {
+    const res = await fetch(url, { method: "GET", redirect: "manual", signal: ac.signal, headers: { "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1" } });
+    const loc = res.headers.get("location");
+    if (loc && /^https?:\/\//i.test(loc)) {
+      // Drop the tracking payload the app attaches; keep only what identifies the page.
+      const u = new URL(loc);
+      for (const key of [...u.searchParams.keys()]) if (key !== "region") u.searchParams.delete(key);
+      return u.toString();
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+    opts.signal?.removeEventListener("abort", onAbort);
+  }
+}
+
 export function platformLabel(p: Platform): string {
   const map: Record<Platform, string> = {
     tiktok: "TikTok",

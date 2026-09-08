@@ -14,7 +14,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { Engine } from "./index.js";
 import type { IncomingFile } from "./ingest/attachments.js";
-import { detectInput } from "./ingest/detect.js";
+import { detectInput, expandShortLinks } from "./ingest/detect.js";
 import { ingest } from "./ingest/ingest.js";
 import { loadDotEnv } from "./util/env.js";
 import { createLogger, setLogLevel } from "./util/log.js";
@@ -121,7 +121,7 @@ async function main(): Promise<void> {
     case "probe": {
       const raw = args.positional.join("\n");
       if (!raw.trim()) throw new Error("nexova probe <links>");
-      const det = detectInput(raw);
+      const det = await expandShortLinks(detectInput(raw), { timeoutMs: engine.config.fetchTimeoutMs });
       const files = await readAttachments(list(args.flags.attach));
       const probeDir = path.join(engine.config.dataDir, "probe", String(Date.now()));
       const attachments = files.length ? await (await import("./ingest/attachments.js")).saveAttachments(files, { storage: engine.storage, keyPrefix: `attachments/${path.basename(probeDir)}` }) : [];
