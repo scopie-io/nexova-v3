@@ -19,7 +19,7 @@ import { assemble, captureAttachments, ingestUrls, processAttachments, runDiscov
 import { coverageSummary } from "../ingest/coverage.js";
 import { localizeAssets } from "../generate/assets.js";
 import { buildSite } from "../generate/build.js";
-import { composeSite } from "../generate/compose.js";
+import { composeSite, composeSiteFiles } from "../generate/compose.js";
 import type { StoreDraft, ProductDraft } from "../schema/drafts.js";
 import type { JobEvent, JobRecord, StepName, StepState } from "../schema/job.js";
 import type { TemplateEntry } from "../schema/manifest.js";
@@ -347,8 +347,14 @@ export async function stageTemplate(ctx: StageContext, source: "spec" | "store" 
   spec.template = { id: entry.manifest.id, reason };
   job.templateId = entry.manifest.id;
   await deps.jobs.putArtifact(job, "spec", spec);
-  await deps.jobs.putArtifact(job, "template", entry);
+  await deps.jobs.putArtifact(job, "template", { manifest: entry.manifest, dir: entry.dir } satisfies TemplateEntry);
   return `${entry.manifest.name} (${entry.manifest.id}) — ${reason}`;
+}
+
+/** The template picked for this job, resolved to the live registry entry (with bundled files when there are any). */
+async function templateFor(ctx: StageContext): Promise<TemplateEntry> {
+  const saved = await artifact<TemplateEntry>(ctx, "template");
+  return (await ctx.deps.registry.get(saved.manifest.id)) ?? saved;
 }
 
 export interface SiteArtifact {
@@ -360,7 +366,7 @@ export interface SiteArtifact {
 export async function stageCompose(ctx: StageContext): Promise<StepOutcome> {
   const { job, deps } = ctx;
   const spec = parseStoreSpec(await artifact<StoreSpec>(ctx, "spec"));
-  const template = await artifact<TemplateEntry>(ctx, "template");
+  const template = await templateFor(ctx);
   const basePath = deps.deployer.basePath(job.slug!);
   await deps.stores.saveSpec(spec);
   await deps.stores.updateMeta(spec.slug, { jobId: job.id, templateId: template.manifest.id });
@@ -373,8 +379,9 @@ export async function stageBuild(ctx: StageContext): Promise<StepOutcome> {
   const { job, deps } = ctx;
   if (job.input.options.skipBuild) return { skip: "skipped by request" };
   const site = await artifact<SiteArtifact>(ctx, "site");
-  const template = await artifact<TemplateEntry>(ctx, "template");
-  await deps.registry.ensureInstalled(template, ctx.log.child("install"), ctx.signal);
+  const template = await templateFor(ctx);
+  // Templates on disk share one node_modules; a bundled template installs inside the site folder (buildSite does that).
+  if (template.dir) await deps.registry.ensureInstalled(template, ctx.log.child("install"), ctx.signal);
   const result = await buildSite({ siteDir: site.siteDir, template, basePath: site.basePath, slug: job.slug!, log: ctx.log.child("build"), signal: ctx.signal, onLine: (line) => progress(ctx, "build", line) });
   await deps.jobs.putArtifact(job, "site", { ...site, distDir: result.outDir } satisfies SiteArtifact);
   return `built in ${Math.round(result.durationMs / 1000)}s`;
@@ -389,6 +396,41 @@ export async function stageDeploy(ctx: StageContext): Promise<StepOutcome> {
   job.siteUrl = result.url;
   await deps.stores.updateMeta(job.slug!, { siteUrl: result.url, builtAt: new Date().toISOString(), deployProvider: result.provider, jobId: job.id, templateId: job.templateId });
   return `live at ${result.url}`;
+}
+
+/**
+ * Compose + build + deploy in one go, for hosts where these must happen inside a single invocation
+ * (no persistent disk between steps). With a deployer that builds from source (Vercel) the build
+ * step is skipped locally; otherwise it falls back to the on-disk compose/build/deploy.
+ */
+export async function stagePublish(ctx: StageContext): Promise<void> {
+  const { job, deps } = ctx;
+  if (!deps.deployer.deploySource || job.input.options.skipBuild) {
+    await runStep(ctx, "compose", () => stageCompose(ctx));
+    await runStep(ctx, "build", () => stageBuild(ctx));
+    await runStep(ctx, "deploy", () => stageDeploy(ctx));
+    return;
+  }
+  let files: Record<string, Uint8Array | string> = {};
+  let template: TemplateEntry | null = null;
+  let spec: StoreSpec | null = null;
+  await runStep(ctx, "compose", async () => {
+    spec = parseStoreSpec(await artifact<StoreSpec>(ctx, "spec"));
+    template = await templateFor(ctx);
+    const basePath = deps.deployer.basePath(job.slug!);
+    await deps.stores.saveSpec(spec);
+    await deps.stores.updateMeta(spec.slug, { jobId: job.id, templateId: template.manifest.id });
+    files = await composeSiteFiles({ spec, template, config: deps.config, basePath });
+    await deps.jobs.putArtifact(job, "site", { siteDir: "", basePath } satisfies SiteArtifact);
+    return `${Object.keys(files).length} files composed in memory`;
+  });
+  await runStep(ctx, "build", async () => ({ skip: `built by ${deps.deployer.id}` }));
+  await runStep(ctx, "deploy", async () => {
+    const result = await deps.deployer.deploySource!({ slug: job.slug!, files, framework: "vite", buildCommand: template!.manifest.build.build, outputDir: template!.manifest.build.outDir, basePath: deps.deployer.basePath(job.slug!), spec: spec!, log: ctx.log.child("deploy"), signal: ctx.signal });
+    job.siteUrl = result.url;
+    await deps.stores.updateMeta(job.slug!, { siteUrl: result.url, builtAt: new Date().toISOString(), deployProvider: result.provider, jobId: job.id, templateId: job.templateId });
+    return `live at ${result.url}`;
+  });
 }
 
 export async function finishJob(ctx: StageContext): Promise<JobRecord> {

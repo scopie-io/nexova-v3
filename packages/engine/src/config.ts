@@ -85,8 +85,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, rootDir = proce
   return {
     rootDir,
     templatesDir: abs(env.NEXOVA_TEMPLATES_DIR, "templates"),
-    storesDir: abs(env.NEXOVA_STORES_DIR, "stores"),
-    dataDir: abs(env.NEXOVA_DATA_DIR, "data"),
+    // On Vercel only /tmp is writable; with Neon + Blob these folders hold scratch files only.
+    storesDir: abs(env.NEXOVA_STORES_DIR, env.VERCEL ? "/tmp/nexova/stores" : "stores"),
+    dataDir: abs(env.NEXOVA_DATA_DIR, env.VERCEL ? "/tmp/nexova/data" : "data"),
     model: env.NEXOVA_MODEL?.trim() || "claude-opus-5",
     effort: EFFORTS.includes(effortRaw) ? effortRaw : "high",
     researchEffort: (() => {

@@ -12,7 +12,7 @@ import type { EngineConfig } from "../config.js";
 import type { ClaudeGateway } from "../claude/gateway.js";
 import type { UsageLedger } from "../claude/usage.js";
 import type { Deployer } from "../generate/deploy/types.js";
-import type { JobRecord } from "../schema/job.js";
+import type { JobEvent, JobRecord } from "../schema/job.js";
 import type { Storage } from "../storage/types.js";
 import type { StoreRepository } from "../store/repository.js";
 import type { TemplateRegistry } from "../templates/registry.js";
@@ -34,12 +34,16 @@ export interface PipelineDeps {
   storage: Storage;
 }
 
-/** Wire logs and usage for a job into the bus and the job record while it runs. */
-function attach(job: JobRecord, deps: PipelineDeps, signal: AbortSignal): { ctx: StageContext; detach: () => void } {
+/**
+ * Build a stage context for a job: a logger whose records become job events and log lines, and a
+ * ledger listener that keeps job.usage current. `publish` defaults to the in-process bus; the
+ * Workflow runner passes a function that writes to the run's stream instead.
+ */
+export function createStageContext(job: JobRecord, deps: PipelineDeps, signal: AbortSignal, publish: (e: JobEvent) => void = (e) => deps.bus.publish(e)): { ctx: StageContext; detach: () => void } {
   const log = createLogger(`job:${job.id.slice(-6)}`);
   const stopSink = addLogSink((rec) => {
     if (!rec.ns.startsWith(log.ns) && !rec.ns.startsWith("claude") && !rec.ns.startsWith("templates")) return;
-    deps.bus.publish({ type: "log", jobId: job.id, record: rec, at: rec.ts });
+    publish({ type: "log", jobId: job.id, record: rec, at: rec.ts });
     void deps.jobs.appendLog(job, `${rec.ts} ${rec.level} [${rec.ns}] ${rec.msg}${rec.data ? " " + JSON.stringify(rec.data) : ""}`);
   });
   const stopLedger = deps.ledger.onEntry((e) => {
@@ -52,16 +56,16 @@ function attach(job: JobRecord, deps: PipelineDeps, signal: AbortSignal): { ctx:
     job.usage.webSearches += e.webSearches;
     job.usage.webFetches += e.webFetches;
     job.usage.costUsd = Math.round((job.usage.costUsd + e.costUsd) * 1_000_000) / 1_000_000;
-    deps.bus.publish({ type: "usage", jobId: job.id, usage: job.usage, at: new Date().toISOString() });
+    publish({ type: "usage", jobId: job.id, usage: job.usage, at: new Date().toISOString() });
   });
-  const ctx: StageContext = { deps, job, log, signal, publish: (e) => deps.bus.publish(e) };
+  const ctx: StageContext = { deps, job, log, signal, publish };
   return { ctx, detach: () => (stopSink(), stopLedger()) };
 }
 
 export async function runJob(jobId: string, deps: PipelineDeps, signal: AbortSignal): Promise<JobRecord> {
   const job = await deps.jobs.get(jobId);
   if (!job) throw new Error(`job ${jobId} not found`);
-  const { ctx, detach } = attach(job, deps, signal);
+  const { ctx, detach } = createStageContext(job, deps, signal);
   try {
     await setStatus(ctx, "running");
     await runStep(ctx, "detect", () => stageDetect(ctx));
@@ -89,7 +93,7 @@ export async function runRebuild(jobId: string, slug: string, deps: PipelineDeps
   const job = await deps.jobs.get(jobId);
   if (!job) throw new Error(`job ${jobId} not found`);
   job.slug = slug;
-  const { ctx, detach } = attach(job, deps, signal);
+  const { ctx, detach } = createStageContext(job, deps, signal);
   try {
     await setStatus(ctx, "running");
     for (const name of ["detect", "ingest", "discover", "attachments", "research", "normalize", "assets", "enrich"] as const) await skipStep(ctx, name, "rebuild");

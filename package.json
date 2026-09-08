@@ -15,7 +15,9 @@
     "doctor": "node packages/engine/dist/cli.js doctor",
     "test": "npm run test -w @nexova/engine",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "nexova": "node packages/engine/dist/cli.js"
+    "nexova": "node packages/engine/dist/cli.js",
+    "build:cloud": "npm run build -w @nexova/engine && npm run build -w @nexova/web && npm run build:cloud -w @nexova/server",
+    "dev:cloud": "npm run build -w @nexova/engine && npm run build -w @nexova/web && npm run dev:cloud -w @nexova/server"
   },
   "engines": {
     "node": ">=20"

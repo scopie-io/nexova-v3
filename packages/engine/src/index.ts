@@ -21,6 +21,7 @@ import { JobBus } from "./pipeline/events.js";
 import { JobStore } from "./pipeline/job-store.js";
 import { runJob, runRebuild, type PipelineDeps } from "./pipeline/pipeline.js";
 import type { JobEvent, JobOptions, JobRecord } from "./schema/job.js";
+import type { TemplateBundle } from "./schema/manifest.js";
 import { StoreRepository } from "./store/repository.js";
 import { TemplateRegistry } from "./templates/registry.js";
 import { ensureDir } from "./util/fsx.js";
@@ -32,6 +33,8 @@ export interface EngineOptions {
   deployer?: Deployer;
   env?: NodeJS.ProcessEnv;
   rootDir?: string;
+  /** Templates snapshotted at build time (scripts/bundle-templates.mjs) for hosts without a templates folder. */
+  templateBundle?: TemplateBundle | null;
 }
 
 export class Engine {
@@ -51,7 +54,7 @@ export class Engine {
     this.config = { ...loadConfig(opts.env ?? process.env, opts.rootDir ?? process.cwd()), ...(opts.config ?? {}) };
     this.storage = createStorage(this.config);
     this.ledger = new UsageLedger(this.config, this.storage);
-    this.registry = new TemplateRegistry(this.config);
+    this.registry = new TemplateRegistry(this.config, opts.templateBundle ?? null);
     this.jobs = new JobStore(this.config, this.storage);
     this.stores = new StoreRepository(this.config, this.storage);
     this.bus = new JobBus();
@@ -74,7 +77,8 @@ export class Engine {
     if (this.config.offline) this.log.warn("running OFFLINE: no ANTHROPIC_API_KEY found, using heuristic gateway (lower quality). Set the key in .env to enable Claude.");
   }
 
-  private deps(): PipelineDeps {
+  /** Everything the pipeline stages need; exposed so external runners (Workflow steps) can drive stages. */
+  deps(): PipelineDeps {
     return { config: this.config, gateway: this.gateway, ledger: this.ledger, registry: this.registry, jobs: this.jobs, stores: this.stores, bus: this.bus, deployer: this.deployer, storage: this.storage };
   }
 
@@ -188,6 +192,8 @@ export { JobBus } from "./pipeline/events.js";
 export * as stages from "./pipeline/stages.js";
 export type { StageContext, StepOutcome } from "./pipeline/stages.js";
 export type { PipelineDeps } from "./pipeline/pipeline.js";
+export { createStageContext } from "./pipeline/pipeline.js";
+export { composeSiteFiles } from "./generate/compose.js";
 export { JobStore } from "./pipeline/job-store.js";
 export { loadDotEnv } from "./util/env.js";
 export { createLogger, addLogSink, setLogLevel } from "./util/log.js";

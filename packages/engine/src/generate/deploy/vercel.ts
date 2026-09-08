@@ -13,7 +13,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { EngineConfig } from "../../config.js";
 import { sleep } from "../../util/retry.js";
-import type { Deployer, DeployInput, DeployResult } from "./types.js";
+import type { Deployer, DeployInput, DeployResult, DeploySourceInput } from "./types.js";
 
 const API = "https://api.vercel.com";
 const IGNORE = new Set(["node_modules", ".git", ".vercel", ".DS_Store", "dist", ".vite", ".cache"]);
@@ -88,18 +88,28 @@ export class VercelDeployer implements Deployer {
   async deploy(input: DeployInput): Promise<DeployResult> {
     const mode = input.sourceDir ? "source" : "dist";
     const dir = input.sourceDir ?? input.distDir;
-    const project = await this.ensureProject(input.slug, mode === "source" ? (input.framework ?? "vite") : null);
+    const files: Record<string, Uint8Array> = {};
+    for (const rel of await walk(dir)) files[rel.split(path.sep).join("/")] = new Uint8Array(await fs.readFile(path.join(dir, rel)));
+    return this.publish({ slug: input.slug, files, spec: input.spec, log: input.log, signal: input.signal, mode, framework: mode === "source" ? (input.framework ?? "vite") : null, buildCommand: input.buildCommand ?? null, outputDir: input.outputDir ?? null, basePath: "/" });
+  }
+
+  async deploySource(input: DeploySourceInput): Promise<DeployResult> {
+    return this.publish({ ...input, mode: "source", framework: input.framework ?? "vite" });
+  }
+
+  private async publish(input: { slug: string; files: Record<string, Uint8Array | string>; spec: DeployInput["spec"]; log: DeployInput["log"]; signal?: AbortSignal; mode: "dist" | "source"; framework: string | null; buildCommand: string | null; outputDir: string | null; basePath: string }): Promise<DeployResult> {
+    const { mode } = input;
+    const project = await this.ensureProject(input.slug, mode === "source" ? input.framework : null);
     input.log.info(`vercel project ${project.name} (${project.id}), ${mode} deploy`);
 
-    const files: Array<{ file: string; sha: string; size: number; abs: string }> = [];
-    for (const rel of await walk(dir)) {
-      const abs = path.join(dir, rel);
-      const data = await fs.readFile(abs);
-      files.push({ file: rel.split(path.sep).join("/"), sha: createHash("sha1").update(data).digest("hex"), size: data.byteLength, abs });
+    const files: Array<{ file: string; sha: string; size: number; data: Buffer }> = [];
+    for (const [file, raw] of Object.entries(input.files)) {
+      const data = typeof raw === "string" ? Buffer.from(raw, "utf8") : Buffer.from(raw);
+      files.push({ file, sha: createHash("sha1").update(data).digest("hex"), size: data.byteLength, data });
     }
     let uploaded = 0;
     for (const f of files) {
-      await this.uploadFile(f.sha, await fs.readFile(f.abs));
+      await this.uploadFile(f.sha, f.data);
       uploaded++;
     }
     input.log.info(`vercel: ${uploaded} files uploaded, creating deployment…`);
@@ -109,7 +119,8 @@ export class VercelDeployer implements Deployer {
       project: project.id,
       target: "production",
       files: files.map(({ file, sha, size }) => ({ file, sha, size })),
-      projectSettings: mode === "source" ? { framework: input.framework ?? "vite", buildCommand: input.buildCommand ?? null, outputDirectory: input.outputDir ?? null, installCommand: null } : { framework: null, buildCommand: null, outputDirectory: null, installCommand: null },
+      projectSettings: mode === "source" ? { framework: input.framework, buildCommand: input.buildCommand, outputDirectory: input.outputDir, installCommand: null } : { framework: null, buildCommand: null, outputDirectory: null, installCommand: null },
+      build: mode === "source" ? { env: { NEXOVA_BASE_PATH: input.basePath, NEXOVA_SLUG: input.slug, NODE_ENV: "production" } } : undefined,
       meta: { nexovaSlug: input.slug, nexovaTemplate: input.spec.template.id ?? "" },
     });
 

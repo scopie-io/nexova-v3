@@ -10,3 +10,6 @@ Thumbs.db
 .vercel
 .env.local
 .env*.local
+packages/server/src/templates.bundle.ts
+.workflow-data/
+.output/

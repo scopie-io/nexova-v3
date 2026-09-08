@@ -77,6 +77,8 @@ export interface JobRecord {
   updatedAt: string;
   /** Files produced by the pipeline (relative to dataDir/jobs/<id>/) */
   artifacts: Record<string, string>;
+  /** Workflow run id when the job runs as a durable workflow (Vercel); null in-process. */
+  runId?: string | null;
 }
 
 export type JobEvent =

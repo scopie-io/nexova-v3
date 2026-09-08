@@ -5,6 +5,7 @@ import path from "node:path";
 import type { EngineConfig } from "../config.js";
 import type { TemplateEntry } from "../schema/manifest.js";
 import type { StoreSpec, Theme } from "../schema/store-spec.js";
+import { promises as fs } from "node:fs";
 import { copyDir, ensureDir, exists, linkDir, rmrf, writeJson, writeText } from "../util/fsx.js";
 import type { Logger } from "../util/log.js";
 
@@ -64,12 +65,23 @@ export async function composeSite(input: ComposeInput): Promise<ComposeResult> {
   const siteDir = siteDirFor(config, spec.slug);
   const assetsDir = assetsDirFor(config, spec.slug);
 
-  // Fresh copy of the template (keeps node_modules linked, never copied).
+  // Fresh copy of the template (keeps node_modules linked, never copied). Bundled templates
+  // (no folder on disk) are written out from their files instead.
   await rmrf(siteDir);
   await ensureDir(siteDir);
-  const filesCopied = await copyDir(template.dir, siteDir, { ignore: ["node_modules", "dist", ".git", ".vite", ".cache", ".DS_Store"] });
-  const templateNodeModules = path.join(template.dir, "node_modules");
-  if (await exists(templateNodeModules)) {
+  let filesCopied = 0;
+  if (!template.dir && template.files) {
+    for (const [rel, f] of Object.entries(template.files)) {
+      const dest = path.join(siteDir, rel);
+      await ensureDir(path.dirname(dest));
+      await fs.writeFile(dest, f.encoding === "base64" ? Buffer.from(f.data, "base64") : f.data);
+      filesCopied++;
+    }
+  } else {
+    filesCopied = await copyDir(template.dir, siteDir, { ignore: ["node_modules", "dist", ".git", ".vite", ".cache", ".DS_Store"] });
+  }
+  const templateNodeModules = template.dir ? path.join(template.dir, "node_modules") : "";
+  if (templateNodeModules && (await exists(templateNodeModules))) {
     try {
       await linkDir(templateNodeModules, path.join(siteDir, "node_modules"));
     } catch (err) {
@@ -97,4 +109,38 @@ export async function composeSite(input: ComposeInput): Promise<ComposeResult> {
   });
   log.info(`composed site from template ${template.manifest.id}`, { files: filesCopied, siteDir });
   return { siteDir, dataFile, themeFile, filesCopied };
+}
+
+export type SiteFiles = Record<string, Uint8Array | string>;
+
+const SOURCE_IGNORE = new Set(["node_modules", "dist", ".git", ".vite", ".cache", ".DS_Store", ".vercel"]);
+
+async function readTemplateFiles(dir: string, rel = ""): Promise<SiteFiles> {
+  const out: SiteFiles = {};
+  for (const e of await fs.readdir(dir, { withFileTypes: true })) {
+    if (SOURCE_IGNORE.has(e.name) || e.isSymbolicLink()) continue;
+    const r = rel ? `${rel}/${e.name}` : e.name;
+    if (e.isDirectory()) Object.assign(out, await readTemplateFiles(path.join(dir, e.name), r));
+    else if (e.isFile()) out[r] = new Uint8Array(await fs.readFile(path.join(dir, e.name)));
+  }
+  return out;
+}
+
+/**
+ * Compose a site entirely in memory: template files + store.json + theme.css + nexova.site.json.
+ * Used by deployers that run the template's build themselves (Vercel), and on hosts without a
+ * template folder on disk. Images are expected to be absolute URLs already (Blob storage).
+ */
+export async function composeSiteFiles(input: Omit<ComposeInput, "log">): Promise<SiteFiles> {
+  const { spec, template, config } = input;
+  const files: SiteFiles = {};
+  if (template.files) {
+    for (const [p, f] of Object.entries(template.files)) files[p] = f.encoding === "base64" ? new Uint8Array(Buffer.from(f.data, "base64")) : f.data;
+  } else if (template.dir) {
+    Object.assign(files, await readTemplateFiles(template.dir));
+  } else throw new Error(`template ${template.manifest.id} has neither files nor a folder`);
+  files[template.manifest.entry.dataFile] = JSON.stringify(spec, null, 2);
+  files[template.manifest.entry.themeFile] = themeCss(spec.theme, spec.brand.name);
+  files["nexova.site.json"] = JSON.stringify({ slug: spec.slug, templateId: template.manifest.id, templateVersion: template.manifest.version, basePath: input.basePath, engineVersion: config.engineVersion, composedAt: new Date().toISOString() }, null, 2);
+  return files;
 }

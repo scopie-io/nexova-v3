@@ -1,6 +1,6 @@
 # Nexova on Vercel — architecture plan
 
-Status: proposed, 2026-09-08. Supersedes the "runs on a merchant's PC" deployment model in the README once complete.
+Status: phases 1 to 3 implemented, 2026-09-08; phase 4 (cutover) pending Neon terms and a Vercel token. Supersedes the "runs on a merchant's PC" deployment model in the README once complete.
 
 ## Why this needs re-architecture
 
@@ -18,11 +18,13 @@ Everything else in the engine (detection, ingestion providers, Claude gateway, m
 ## Target layout
 
 ```
-Vercel project "nexova"
-  /                 packages/web (static Vite build)
-  /api/*            packages/server: Hono on Vercel Functions (Nitro + workflow/nitro)
-  workflows         packages/engine pipeline, one step per stage
-  templates/**      bundled read-only with the function
+Vercel project "nexova"  (root directory: packages/server)
+  /                 packages/web (static Vite build, served by Nitro publicAssets)
+  /api/*            packages/server/src/app.ts: Hono on a Vercel Function (Nitro, preset vercel)
+  workflows         packages/server/src/workflows/build-store.ts: one Workflow step per stage,
+                    emitted as .well-known/workflow/v1/{flow,step}.func with queue triggers
+  templates         packages/server/src/templates.bundle.ts, generated at build time from templates/
+                    by scripts/bundle-templates.mjs (no template folder on the function)
 
 Neon Postgres       jobs, job_steps (inside jobs json), artifacts (small, jsonb), stores (spec jsonb + meta),
                     usage_ledger, source_cache (url, signals jsonb, saved_at), slugs
@@ -85,6 +87,17 @@ The local `LocalDeployer` and `NetlifyDeployer` remain for the FS mode.
 - Playwright provider (no browser in the function). Readers, Wayback, and the TikTok Shop API cover the same ground.
 - `nexova doctor --schemas` and other CLI commands keep working locally against FsStorage; they are not deployed.
 
+## How it is wired (as built)
+
+- `packages/engine/src/storage/` is the Storage seam: `FsStorage` keeps today's layout, `VercelStorage` uses two generic Neon tables (`nexova_records`, `nexova_lines`) and Vercel Blob. `NEXOVA_STORAGE=auto` picks Neon+Blob when `DATABASE_URL` and `BLOB_READ_WRITE_TOKEN` are set.
+- `packages/engine/src/pipeline/stages.ts` holds every pipeline stage as a function over job artifacts; `pipeline.ts` (local, in-process) and `packages/server/src/workflows/build-store.ts` (Workflow steps) are thin sequences over the same stages. A job's artifact map lives on the job record, so every step must save the record before the next invocation reads it.
+- `packages/server/src/app.ts` is the Hono API with a `JobLauncher` abstraction: `inProcessLauncher` (local `index.ts`) or `workflowLauncher` (`nitro.ts`), which starts runs and turns the run's stream into the same SSE events the web app already consumes. `JobRecord.runId` links a job to its run.
+- On Vercel, compose + build + deploy happen in one step (`stagePublish`): the site is composed in memory from the template bundle and pushed through `VercelDeployer.deploySource`, which creates `nexova-<slug>` and lets Vercel run the Vite build. Locally the same stage falls back to the on-disk compose/build/deploy.
+- Research is capped at 240 s inside its step so it fits a Hobby-plan function; ingestion of many links is the next candidate for splitting into parallel steps.
+- Workflow retries are set to 0 on every step that calls Claude; the engine's own single retry inside `runStep` still applies.
+- Vercel build: `packages/server/vercel.json` runs the monorepo build from the repo root; `nitro build` with the `vercel` preset writes `packages/server/.vercel/output` including the two workflow functions (`maxDuration: max`, `nodejs22.x`).
+- Local cloud-mode dev: `npm run dev:cloud` (bundles templates, runs `nitro dev` with the Local World). `npx workflow web` shows runs.
+
 ## Environment variables (Vercel project)
 
 | Variable | Purpose |
@@ -94,6 +107,9 @@ The local `LocalDeployer` and `NetlifyDeployer` remain for the FS mode.
 | `DATABASE_URL` | Neon, provisioned through the Vercel Marketplace |
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob store |
 | `VERCEL_TOKEN`, `VERCEL_TEAM_ID` | Deployments API for store projects |
+| `NEXOVA_DEPLOY_TARGET=vercel` | Publish stores to their own Vercel projects |
+| `NEXOVA_STORAGE=vercel` | Force Neon+Blob (auto-detected when both are set) |
+| `NEXOVA_RESEARCH_TIMEOUT_MS=240000` | Keep research inside one function invocation |
 | `NEXOVA_PUBLIC_URL` | The Nexova app URL |
 
 ## Phases

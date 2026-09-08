@@ -4,7 +4,7 @@
  */
 import path from "node:path";
 import type { EngineConfig } from "../config.js";
-import { TemplateManifestSchema, type TemplateEntry, type TemplateManifest } from "../schema/manifest.js";
+import { TemplateManifestSchema, type TemplateBundle, type TemplateEntry, type TemplateManifest } from "../schema/manifest.js";
 import { exists, listDirs, readJsonOrNull } from "../util/fsx.js";
 import { createLogger, type Logger } from "../util/log.js";
 import { runCommand, tail } from "../util/proc.js";
@@ -15,7 +15,10 @@ export class TemplateRegistry {
   private cache: TemplateEntry[] | null = null;
   private installing = new Map<string, Promise<void>>();
 
-  constructor(private readonly config: EngineConfig) {}
+  constructor(
+    private readonly config: EngineConfig,
+    private readonly bundle: TemplateBundle | null = null,
+  ) {}
 
   invalidate(): void {
     this.cache = null;
@@ -25,6 +28,32 @@ export class TemplateRegistry {
     if (this.cache && !force) return this.cache;
     const entries: TemplateEntry[] = [];
     const problems: string[] = [];
+    if (this.bundle) {
+      for (const t of this.bundle.templates) {
+        const rawManifest = t.files["nexova.template.json"];
+        if (!rawManifest) {
+          problems.push(`${t.id}: bundle has no nexova.template.json`);
+          continue;
+        }
+        let parsedJson: unknown;
+        try {
+          parsedJson = JSON.parse(rawManifest.encoding === "base64" ? Buffer.from(rawManifest.data, "base64").toString("utf8") : rawManifest.data);
+        } catch {
+          problems.push(`${t.id}: invalid manifest JSON`);
+          continue;
+        }
+        const parsed = TemplateManifestSchema.safeParse(parsedJson);
+        if (!parsed.success) {
+          problems.push(`${t.id}: invalid manifest: ${parsed.error.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ")}`);
+          continue;
+        }
+        entries.push({ manifest: parsed.data, dir: "", files: t.files });
+      }
+      for (const p of problems) log.warn(p);
+      entries.sort((a, b) => a.manifest.id.localeCompare(b.manifest.id));
+      this.cache = entries;
+      return entries;
+    }
     for (const name of await listDirs(this.config.templatesDir)) {
       if (name.startsWith(".") || name.startsWith("_") || name === "node_modules") continue;
       const dir = path.join(this.config.templatesDir, name);
@@ -65,6 +94,7 @@ export class TemplateRegistry {
 
   /** Install template dependencies once (shared by every store built from it). */
   async ensureInstalled(entry: TemplateEntry, jobLog: Logger = log, signal?: AbortSignal): Promise<void> {
+    if (!entry.dir) throw new Error(`template ${entry.manifest.id} comes from a bundle and cannot be built locally; use a deployer that builds from source`);
     const nm = path.join(entry.dir, "node_modules");
     if (await exists(nm)) return;
     const key = entry.manifest.id;

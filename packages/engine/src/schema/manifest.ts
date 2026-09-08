@@ -50,7 +50,18 @@ export const TemplateManifestSchema = z.object({
 });
 export type TemplateManifest = z.infer<typeof TemplateManifestSchema>;
 
+/** Template files keyed by path relative to the template root (no node_modules/dist). */
+export type TemplateFiles = Record<string, { encoding: "utf8" | "base64"; data: string }>;
+
 export interface TemplateEntry {
   manifest: TemplateManifest;
+  /** Template folder on disk, or "" when the template comes from a bundle (Vercel). */
   dir: string;
+  files?: TemplateFiles;
+}
+
+/** Build-time snapshot of every template, so the engine can compose sites without a filesystem. */
+export interface TemplateBundle {
+  generatedAt: string;
+  templates: Array<{ id: string; files: TemplateFiles }>;
 }
