@@ -7,6 +7,7 @@ import path from "node:path";
 import type { EngineConfig } from "../config.js";
 import { emptyUsage, initialSteps, type JobOptions, type JobRecord } from "../schema/job.js";
 import { saveAttachments, type IncomingFile } from "../ingest/attachments.js";
+import { artifactFile } from "../storage/fs.js";
 import type { Storage } from "../storage/types.js";
 import { newId } from "../util/ids.js";
 
@@ -69,7 +70,7 @@ export class JobStore {
 
   async putArtifact(job: JobRecord, name: string, data: unknown): Promise<string> {
     await this.storage.put(`artifacts/${job.id}`, name, data);
-    job.artifacts[name] = name.includes(".") ? name : `${name}.json`;
+    job.artifacts[name] = artifactFile(name);
     return name;
   }
 

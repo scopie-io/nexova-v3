@@ -38,7 +38,7 @@ export class FsStorage implements Storage {
   private recordFile(collection: string, key: string): string {
     const { dataDir, storesDir } = this.config;
     if (collection === "jobs") return path.join(dataDir, "jobs", key, "job.json");
-    if (collection.startsWith("artifacts/")) return path.join(dataDir, "jobs", collection.slice("artifacts/".length), key.includes(".") ? key : `${key}.json`);
+    if (collection.startsWith("artifacts/")) return path.join(dataDir, "jobs", collection.slice("artifacts/".length), artifactFile(key));
     if (collection === "stores") return path.join(storesDir, key, "store.json");
     if (collection === "store-meta") return path.join(storesDir, key, "store.meta.json");
     if (collection === "source-cache") return path.join(dataDir, "cache", "sources", `${key}.json`);
@@ -158,6 +158,11 @@ export class FsStorage implements Storage {
   async has(ref: string): Promise<boolean> {
     return exists(ref);
   }
+}
+
+/** Text artifacts (research.md, logs) keep their extension; everything else is JSON. */
+export function artifactFile(name: string): string {
+  return /\.(md|txt|log|html|csv)$/i.test(name) ? name : `${name}.json`;
 }
 
 function safeKey(key: string): boolean {
