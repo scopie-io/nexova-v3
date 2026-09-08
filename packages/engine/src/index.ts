@@ -167,7 +167,7 @@ export { AnthropicGateway } from "./claude/anthropic-gateway.js";
 export { OfflineGateway, chooseTemplateByRules } from "./claude/offline-gateway.js";
 export { UsageLedger } from "./claude/usage.js";
 export type { LedgerEntry, UsageReport } from "./claude/usage.js";
-export { buildSpec, applyEnrichment, rawProductsFromTexts } from "./claude/mapping.js";
+export { buildSpec, applyEnrichment, rawProductsFromTexts, evidenceFromSignals, reviewerDisplayName } from "./claude/mapping.js";
 export { TemplateRegistry } from "./templates/registry.js";
 export { StoreRepository } from "./store/repository.js";
 export type { StoreMeta } from "./store/repository.js";

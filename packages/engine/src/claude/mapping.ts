@@ -3,7 +3,7 @@
  * deterministic heuristics shared by the offline gateway.
  */
 import type { EnrichmentDraft, ProductDraft, StoreDraft } from "../schema/drafts.js";
-import type { RawProduct } from "../schema/signals.js";
+import type { SourceSignals, RawProduct } from "../schema/signals.js";
 import { parseStoreSpec, type Category, type Product, type StoreSpec } from "../schema/store-spec.js";
 import { slugify, uniqueSlug } from "../util/ids.js";
 import { guessCurrencyFromText, parsePrice } from "../util/text.js";
@@ -16,6 +16,8 @@ export interface BuildSpecOptions {
   engineVersion: string;
   currencyOverride: string | null;
   sources: StoreSpec["sources"];
+  /** Real facts pulled straight from ingestion (reviews, shop stats, marketplace links) that Claude must not invent. */
+  evidence?: SpecEvidence;
   maxProducts: number;
 }
 
@@ -124,8 +126,11 @@ export function buildSpec(store: StoreDraft, products: ProductDraft[], opts: Bui
   }
 
   const whatsapp = normalizeWhatsapp(store.brand.whatsapp) ?? normalizeWhatsapp(store.social.whatsapp);
-  const externalUrl = text(store.commerce.externalCheckoutUrl);
+  // Buy must lead somewhere on day one: WhatsApp, then the merchant's own checkout link, then the
+  // marketplace shop the catalog came from (TikTok Shop, Shopee...).
+  const externalUrl = text(store.commerce.externalCheckoutUrl) ?? opts.evidence?.marketplaceUrl ?? null;
   const checkoutMode = whatsapp ? "whatsapp" : externalUrl ? "external_link" : store.commerce.checkoutMode === "whatsapp" ? "none" : store.commerce.checkoutMode;
+  const testimonials = opts.evidence?.testimonials ?? [];
 
   // Normalization returns facts only; design and copy start from deterministic defaults and are
   // refined by the enrich step, so the store is already coherent even if enrichment fails.
@@ -184,12 +189,12 @@ export function buildSpec(store: StoreDraft, products: ProductDraft[], opts: Bui
         heroCta: hero.heroCta,
         announcement: "",
         featuredProductIds: mapped.filter((p) => p.featured && p.visible).slice(0, 8).map((p) => p.id),
-        sections: defaultSections(mapped.length, finalCategories.length, 0, 4),
-        usps: defaultUsps(copy),
+        sections: defaultSections(mapped.length, finalCategories.length, testimonials.length, 4),
+        usps: opts.evidence?.usps.length ? opts.evidence.usps : defaultUsps(copy),
       },
       about: defaultAbout(copy),
       faq: defaultFaq(copy),
-      testimonials: [],
+      testimonials,
       contact: { title: "Contact", body: "" },
     },
     commerce: {
@@ -252,6 +257,71 @@ export function applyEnrichment(spec: StoreSpec, e: EnrichmentDraft, availableTe
   next.meta.warnings = [...new Set([...next.meta.warnings, ...e.warnings])];
   next.meta.updatedAt = new Date().toISOString();
   return parseStoreSpec(next);
+}
+
+export interface SpecEvidence {
+  testimonials: StoreSpec["pages"]["testimonials"];
+  usps: Array<{ title: string; text: string }>;
+  /** The marketplace shop page to send buyers to when there is no WhatsApp number or checkout link. */
+  marketplaceUrl: string | null;
+}
+
+function compactNumber(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1).replace(/\.0$/, "")}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1).replace(/\.0$/, "")}K`;
+  return String(Math.round(n));
+}
+
+/** A marketplace username as a storefront byline: no emoji or decorations, first segment only, short. */
+export function reviewerDisplayName(raw: string | null | undefined, fallback = "TikTok Shop customer"): string {
+  const cleaned = (raw ?? "")
+    .split(/[|•·\u2022]/)[0]
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Modifier}\uFE0F\u200D\u20E3]/gu, "")
+    .replace(/[*~^_=+#<>\[\]{}()]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned.replace(/[^\p{L}\p{N}]/gu, "").length < 2) return fallback;
+  return cleaned.length > 24 ? `${cleaned.slice(0, 22).trim()}…` : cleaned;
+}
+
+/**
+ * Real social proof from ingestion. Today this is what the TikTok Shop API returns (customer reviews,
+ * shop stats, the store link); other providers can feed the same shape.
+ */
+export function evidenceFromSignals(sources: SourceSignals[]): SpecEvidence {
+  const testimonials: SpecEvidence["testimonials"] = [];
+  const seen = new Set<string>();
+  for (const s of sources) {
+    const reviews = (s.embedded.tiktokShopReviews as Array<{ author?: string | null; rating?: number | null; text?: string; source?: string | null }> | undefined) ?? [];
+    for (const r of reviews) {
+      const body = (r.text ?? "").trim();
+      if (body.length < 30 || body.length > 600 || seen.has(body)) continue;
+      if (typeof r.rating === "number" && r.rating < 4) continue;
+      seen.add(body);
+      testimonials.push({ author: reviewerDisplayName(r.author), text: body, rating: typeof r.rating === "number" ? r.rating : null, source: r.source ?? "TikTok Shop" });
+    }
+  }
+
+  const usps: SpecEvidence["usps"] = [];
+  const stats = sources.map((s) => s.embedded.tiktokShop as Record<string, unknown> | undefined).find((t) => t && Object.keys(t).length);
+  const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : null);
+  if (stats) {
+    const sold = n(stats.soldCount);
+    const rating = n(stats.shopRating);
+    const reviewCount = n(stats.reviewCount);
+    const followers = n(stats.followers);
+    const response = n(stats.responseRate);
+    if (sold && sold >= 100) usps.push({ title: `${compactNumber(sold)} orders sold`, text: "Through our official TikTok Shop." });
+    if (rating && rating >= 4) usps.push({ title: `Rated ${rating.toFixed(1)}/5`, text: reviewCount ? `By ${compactNumber(reviewCount)} verified TikTok Shop buyers.` : "By verified TikTok Shop buyers." });
+    if (followers && followers >= 1000) usps.push({ title: `${compactNumber(followers)} followers on TikTok`, text: "New drops and live deals land there first." });
+    if (response && response >= 90) usps.push({ title: `${Math.round(response)}% chat response rate`, text: "Ask us anything before you order." });
+  }
+
+  const shop = sources.find((s) => s.kind === "shop" && ["tiktok_shop", "shopee", "lazada", "shopify"].includes(s.platform)) ?? sources.find((s) => s.platform === "tiktok_shop");
+  const shopId = shop && typeof (shop.embedded.tiktokShop as Record<string, unknown> | undefined)?.shopId === "string" ? ((shop.embedded.tiktokShop as Record<string, unknown>).shopId as string) : null;
+  const marketplaceUrl = shop ? (shop.canonicalUrl ?? (shop.kind === "shop" ? shop.url : null) ?? (shop.platform === "tiktok_shop" && shopId ? `https://www.tiktok.com/shop/store/${shopId}` : null)) : null;
+
+  return { testimonials: testimonials.slice(0, 6), usps: usps.slice(0, 4), marketplaceUrl };
 }
 
 export function defaultSections(productCount: number, categoryCount: number, testimonialCount: number, faqCount: number): StoreSpec["pages"]["home"]["sections"] {

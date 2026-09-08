@@ -9,7 +9,7 @@
 import path from "node:path";
 import type { EngineConfig } from "../config.js";
 import type { ClaudeGateway, GatewayContext } from "../claude/gateway.js";
-import { applyEnrichment, buildSpec } from "../claude/mapping.js";
+import { applyEnrichment, buildSpec, evidenceFromSignals } from "../claude/mapping.js";
 import { chooseTemplateByRules } from "../claude/offline-gateway.js";
 import type { UsageLedger } from "../claude/usage.js";
 import { CURRENCY_BY_REGION, LOCALE_BY_REGION, detectInput } from "../ingest/detect.js";
@@ -180,7 +180,7 @@ export async function runJob(jobId: string, deps: PipelineDeps, signal: AbortSig
       const slug = job.slug ?? (await deps.stores.reserveSlug(job.input.options.slug ?? null, store.brand.name));
       job.slug = slug;
       const sources: SourceRecord[] = ing.sources.map((s) => ({ url: s.url, platform: s.platform, kind: s.kind, handle: s.handle, fetchedAt: s.fetchedAt, status: s.status, providers: s.providers, notes: [s.discovered ? "discovered" : "", ...s.errors.slice(0, 2)].filter(Boolean).join(" | ") }));
-      const spec = buildSpec(store, products, { id: job.id, slug, engineVersion: deps.config.engineVersion, currencyOverride: job.input.options.currency?.toUpperCase() ?? null, sources, maxProducts: deps.config.maxProducts });
+      const spec = buildSpec(store, products, { id: job.id, slug, engineVersion: deps.config.engineVersion, currencyOverride: job.input.options.currency?.toUpperCase() ?? null, sources, maxProducts: deps.config.maxProducts, evidence: evidenceFromSignals(ing.sources) });
       if (spec.catalog.products.length === 0) spec.meta.warnings.push("No products could be extracted. The store is live with an empty catalog; add products in the inventory editor.");
       for (const gap of ing.coverage.gaps.slice(0, 4)) if (!spec.meta.warnings.includes(gap)) spec.meta.warnings.push(gap);
       state.spec = spec;

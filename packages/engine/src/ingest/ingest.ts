@@ -272,7 +272,12 @@ export function summarizeSignalsForPrompt(material: PromptMaterial, maxProducts 
     if (s.contacts.whatsapp || s.contacts.email || s.contacts.phone) lines.push(`contacts: ${JSON.stringify(s.contacts)}`);
     const ogKeys = Object.keys(s.openGraph).filter((k) => !/image|url|type|site_name|title|description/.test(k)).slice(0, 12);
     if (ogKeys.length) lines.push(`meta: ${ogKeys.map((k) => `${k}=${s.openGraph[k]}`).join("; ")}`);
-    if (s.embedded && Object.keys(s.embedded).length) lines.push(`embedded: ${JSON.stringify(s.embedded).slice(0, 2000)}`);
+    const shopStats = s.embedded.tiktokShop as Record<string, unknown> | undefined;
+    if (shopStats && Object.keys(shopStats).length) lines.push(`shop stats (real, from TikTok Shop): ${Object.entries(shopStats).filter(([k, v]) => v != null && k !== "background").map(([k, v]) => `${k}=${v}`).join(", ")}`);
+    const shopReviews = s.embedded.tiktokShopReviews as Array<{ author?: string | null; rating?: number | null; text?: string }> | undefined;
+    if (shopReviews?.length) lines.push(`customer reviews (${shopReviews.length}, real):\n${shopReviews.slice(0, 6).map((r) => `  - ${r.rating ?? "?"}/5 ${r.author ? `by ${r.author}` : ""}: ${(r.text ?? "").slice(0, 200).replace(/\n+/g, " ")}`).join("\n")}`);
+    const { tiktokShop: _stats, tiktokShopReviews: _reviews, ...otherEmbedded } = s.embedded;
+    if (Object.keys(otherEmbedded).length) lines.push(`embedded: ${JSON.stringify(otherEmbedded).slice(0, 2000)}`);
     if (s.images.length) lines.push(`images (${s.images.length}): ${s.images.slice(0, 20).join("\n  ")}`);
     if (s.products.length && !material.products) {
       lines.push(`products found (${s.products.length}):`);

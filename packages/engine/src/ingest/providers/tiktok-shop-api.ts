@@ -108,13 +108,20 @@ export function flattenRichDescription(desc: unknown): { text: string; images: s
   return { text: paragraphs.join("\n"), images };
 }
 
+export interface TikTokShopReview {
+  author: string | null;
+  rating: number | null;
+  text: string;
+  source: string | null;
+}
+
 export interface TikTokShopDetail {
   product: RawProduct;
   profile: RawProfile;
   shopId: string | null;
   region: string | null;
   descriptionImages: string[];
-  reviews: Array<{ rating: number | null; text: string }>;
+  reviews: TikTokShopReview[];
   stats: Record<string, number | string | null>;
 }
 
@@ -196,11 +203,15 @@ export function mapProductDetail(data: AnyRec, opts: { region: string | null; ev
     location: str(seller.seller_location),
   };
   const shopId = str(seller.seller_id) ?? str(data.seller_id);
-  const reviews = ((review.review_items as AnyRec[] | undefined) ?? [])
-    .map((r) => r.review as AnyRec | undefined)
-    .filter((r): r is AnyRec => !!r && !!str(r.display_text))
+  const reviews: TikTokShopReview[] = ((review.review_items as AnyRec[] | undefined) ?? [])
+    .filter((item) => !!str((item.review as AnyRec | undefined)?.display_text))
     .slice(0, 6)
-    .map((r) => ({ rating: num(r.rating), text: str(r.display_text)! }));
+    .map((item) => {
+      const r = item.review as AnyRec;
+      const user = (item.review_user ?? {}) as AnyRec;
+      const anonymous = item.is_anonymous === true;
+      return { author: anonymous ? null : str(user.name), rating: num(r.rating), text: str(r.display_text)!, source: str(item.review_source_name) ?? "TikTok Shop" };
+    });
   const stats: TikTokShopDetail["stats"] = {
     shopRating: num(seller.rating),
     productCount: num(seller.product_count) ?? details.items_num ?? null,
@@ -306,11 +317,13 @@ function applyDetail(signals: SourceSignals, detail: TikTokShopDetail): void {
     existing.url = detail.product.url ?? existing.url;
   } else signals.products.push(detail.product);
   applyProfile(signals, detail.profile);
-  mergeUnique(signals.images, [...(detail.product.images ?? []), ...detail.descriptionImages]);
+  // Product photos are hero candidates; description banners are marketing collages with baked-in text, so they stay out of the pool.
+  mergeUnique(signals.images, detail.product.images ?? []);
+  if (typeof detail.stats.background === "string") mergeUnique(signals.images, [detail.stats.background]);
   const shop = (signals.embedded.tiktokShop as AnyRec | undefined) ?? {};
   signals.embedded.tiktokShop = { ...shop, ...Object.fromEntries(Object.entries(detail.stats).filter(([, v]) => v != null)), shopId: detail.shopId ?? shop.shopId ?? null, region: detail.region ?? shop.region ?? null };
   if (detail.reviews.length) {
-    const prev = (signals.embedded.tiktokShopReviews as Array<{ rating: number | null; text: string }> | undefined) ?? [];
+    const prev = (signals.embedded.tiktokShopReviews as TikTokShopReview[] | undefined) ?? [];
     const seen = new Set(prev.map((r) => r.text));
     signals.embedded.tiktokShopReviews = [...prev, ...detail.reviews.filter((r) => !seen.has(r.text))].slice(0, 12);
   }
