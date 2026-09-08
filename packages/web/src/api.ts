@@ -24,6 +24,7 @@ export interface Job {
   usage: Usage;
   error: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 export interface TemplateManifest {
   id: string;
