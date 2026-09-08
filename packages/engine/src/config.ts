@@ -127,7 +127,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, rootDir = proce
     })(),
     databaseUrl: env.DATABASE_URL?.trim() || null,
     blobToken: env.BLOB_READ_WRITE_TOKEN?.trim() || null,
-    vercelToken: env.VERCEL_TOKEN?.trim() || null,
+    // NEXOVA_VERCEL_TOKEN avoids the reserved VERCEL_ prefix on Vercel itself; VERCEL_TOKEN still works locally.
+    vercelToken: env.NEXOVA_VERCEL_TOKEN?.trim() || env.VERCEL_TOKEN?.trim() || null,
     vercelTeamId: env.VERCEL_TEAM_ID?.trim() || null,
   };
 }
