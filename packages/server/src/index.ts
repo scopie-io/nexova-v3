@@ -79,7 +79,7 @@ async function sendFile(root: string, rel: string, spaFallback = true): Promise<
 
 app.get("/api/health", async (c) => {
   const templates = await engine.templates();
-  return c.json({ ok: true, model: engine.config.model, effort: engine.config.effort, offline: engine.config.offline, gateway: engine.gateway.id, deployer: engine.deployer.id, templates: templates.map((t) => t.manifest.id), publicUrl: engine.config.publicUrl });
+  return c.json({ ok: true, model: engine.config.model, effort: engine.config.effort, offline: engine.config.offline, gateway: engine.gateway.id, deployer: engine.deployer.id, templates: templates.map((t) => t.manifest.id), publicUrl: engine.config.publicUrl, tiktokShopApi: !!engine.config.rapidApiKey });
 });
 
 app.get("/api/templates", async (c) => {

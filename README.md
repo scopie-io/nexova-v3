@@ -83,6 +83,10 @@ node scripts/capture.mjs "https://shopee.com.my/yourshop" shot.png
 | `NEXOVA_CACHE_TTL_HOURS` | `24` | Source extraction cache |
 | `NEXOVA_BROWSER` | `0` | `1` enables the optional Playwright provider (`npm i playwright`) |
 | `NEXOVA_READER` | `auto` | Rendered-page reader for bot-blocked pages: `auto` / `off` / `jina` / `firecrawl` / `proxy` (see `docs/INGESTION.md`) |
+| `RAPIDAPI_KEY` | – | Key for the [TikTok Shop API](https://rapidapi.com/api-burst-api-burst-default/api/tiktok-shop-api-product-search-seller-data-reviews) on RapidAPI. Turns a TikTok Shop store/product link into the real catalog (prices, photos, variants, stock, seller profile). One credit per request |
+| `NEXOVA_TIKTOK_SHOP_REGIONS` | `MY,SG,US` | Regions tried in order when a TikTok Shop link does not name its market |
+| `NEXOVA_TIKTOK_SHOP_MAX_PAGES` | `3` | Catalog pages per shop (20 products each) |
+| `NEXOVA_TIKTOK_SHOP_DETAILS` | `6` | Products per shop enriched with full details (one credit each) |
 | `NEXOVA_DISCOVERY` | `1` | Follow bio links / on-page links to find the merchant's other channels; `NEXOVA_SEARCH_DISCOVERY` adds a `site:` web search |
 | `NEXOVA_DEPLOY_TARGET` | `local` | `local` (served by the Nexova server) or `netlify` (needs `NETLIFY_AUTH_TOKEN`) |
 | `NEXOVA_PUBLIC_URL` | `http://localhost:4000` | Base of the live store URLs |

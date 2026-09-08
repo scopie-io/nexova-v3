@@ -18,10 +18,11 @@ Cheapest first; expensive strategies run only while the source is still "thin" (
 
 1. **Source cache** (24h, never reuses blocked/failed results)
 2. **direct-fetch** with a per-platform **user-agent ladder** (`googlebot → desktop → mobile` for Shopee/Lazada/TikTok Shop, `mobile → googlebot → desktop` for Instagram/Facebook). Parses OpenGraph, JSON-LD, readable text, images, links, TikTok `__UNIVERSAL_DATA__`, Instagram inline JSON, and runs the **embedded-JSON hunter** (Next/Nuxt state, `__MODERN_ROUTER_DATA__`, `app.run(...)`, `JSON.parse("...")` blobs) to pull product objects out of any framework payload. Harvests WhatsApp/mailto/tel contacts.
-3. **Platform providers**: TikTok oEmbed; Instagram web + mobile-app profile endpoints (bio links, recent posts); Shopee `get_shop_detail` / `get_shop_base` / `pdp/get_pc` / `search_items` / `recommend`; Lazada `?ajax=true` listings + product JSON; Shopify `/products.json` (paginated) + `/meta.json` currency; Facebook Graph avatar + about page.
-4. **Readers** (fallback): Firecrawl (`FIRECRAWL_API_KEY`, markdown + links + full-page screenshot), generic proxy template (`NEXOVA_PROXY_URL`, e.g. ScrapingBee/ScraperAPI), **Jina Reader** (default, keyless). Rendered markdown is mined for price lines, images, links and contacts.
-5. **Wayback Machine** (fallback, blocked pages only): archived snapshot, products tagged as archived.
-6. **Playwright** (opt-in `NEXOVA_BROWSER=1`): stealth-ish context, auto-scroll for lazy grids, hunter on the rendered DOM, **full-page screenshot fed to vision**.
+3. **TikTok Shop API** (RapidAPI, needs `RAPIDAPI_KEY`): the only strategy that returns a TikTok Shop's real catalog. A store link (`tiktok.com/shop/store/<slug>/<id>`) fetches `/shop/products` page by page (20 per page, `NEXOVA_TIKTOK_SHOP_MAX_PAGES`), then `/shop/product` for the first `NEXOVA_TIKTOK_SHOP_DETAILS` products (description, all photos, variants, stock, reviews, and the seller profile: name, avatar, followers, rating, location). A product link fetches that product, learns the seller id from it, and pulls the rest of the catalog the same way. A `@profile` link fetches the creator's showcase (may include affiliate products, flagged as such). The API is region-scoped: the region in the URL is tried first, then `NEXOVA_TIKTOK_SHOP_REGIONS` in order, and the first region that answers is locked for the rest of the run. Each request is one credit; a quota error stops the provider immediately and the rest of the ladder carries on.
+4. **Platform providers**: TikTok oEmbed; Instagram web + mobile-app profile endpoints (bio links, recent posts); Shopee `get_shop_detail` / `get_shop_base` / `pdp/get_pc` / `search_items` / `recommend`; Lazada `?ajax=true` listings + product JSON; Shopify `/products.json` (paginated) + `/meta.json` currency; Facebook Graph avatar + about page.
+5. **Readers** (fallback): Firecrawl (`FIRECRAWL_API_KEY`, markdown + links + full-page screenshot), generic proxy template (`NEXOVA_PROXY_URL`, e.g. ScrapingBee/ScraperAPI), **Jina Reader** (default, keyless). Rendered markdown is mined for price lines, images, links and contacts.
+6. **Wayback Machine** (fallback, blocked pages only): archived snapshot, products tagged as archived.
+7. **Playwright** (opt-in `NEXOVA_BROWSER=1`): stealth-ish context, auto-scroll for lazy grids, hunter on the rendered DOM, **full-page screenshot fed to vision**.
 
 Every attempt is recorded (`attempts[]`) and shows up in the coverage report.
 
@@ -63,6 +64,10 @@ Prints per-source status, strategies that worked, merged products with provenanc
 
 | Variable | Default | Effect |
 |---|---|---|
+| `RAPIDAPI_KEY` | – | Enables the TikTok Shop API provider (one credit per request) |
+| `NEXOVA_TIKTOK_SHOP_REGIONS` | `MY,SG,US` | Region order for TikTok Shop links that do not name their market |
+| `NEXOVA_TIKTOK_SHOP_MAX_PAGES` | `3` | Catalog pages per TikTok Shop (20 products each) |
+| `NEXOVA_TIKTOK_SHOP_DETAILS` | `6` | Products per TikTok Shop enriched with full details |
 | `NEXOVA_READER` | `auto` | `auto` / `off` / `jina` / `firecrawl` / `proxy` |
 | `JINA_API_KEY` | – | Higher Jina rate limits |
 | `FIRECRAWL_API_KEY` | – | Enables Firecrawl (markdown + screenshot) |

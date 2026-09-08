@@ -1,0 +1,59 @@
+{
+  "success": true,
+  "data": [
+    {
+      "product_id": "1729527313880355335",
+      "title": "Goli Ashwagandha & Vitamin D Gummy - Mixed Berry, KSM-66, Vegan, Plant Based, Non-GMO, Gluten-Free & Gelatin Free. America's #1 Ashwagandha Brand",
+      "price": 14.98,
+      "currency": "USD",
+      "image_url": "https://p16-oec-general-useast5.ttcdn-us.com/tos-useast5-i-omjb5zjo8w-tx/2bc69aa9f6084480beee1bb4a8db3a69~tplv-fhlh96nyum-crop-webp:500:500.webp?dr=12190&t=555f072d&ps=933b5bde&shp=837c8b87&shcp=9b759fb9&idc=useast5&from=2205977479",
+      "rating": 4.5,
+      "review_count": 94627,
+      "shop_id": "7495794203056835079"
+    },
+    {
+      "product_id": "1731194857673101831",
+      "title": "Goli Zero Sugar Best Seller Trio \u2013 Daily Gut & Wellness Support with Pre, Post & Probiotics, Apple Cider Vinegar, Ashwagandha & L-Theanine Gummies",
+      "price": 30.8,
+      "currency": "USD",
+      "image_url": "https://p16-oec-general-useast5.ttcdn-us.com/tos-useast5-i-omjb5zjo8w-tx/02f1b939f53d400998099bfad0f85a14~tplv-fhlh96nyum-crop-webp:500:500.webp?dr=12190&t=555f072d&ps=933b5bde&shp=837c8b87&shcp=9b759fb9&idc=useast5&from=2205977479",
+      "rating": 4.4,
+      "review_count": 47766,
+      "shop_id": "7495794203056835079"
+    },
+    {
+      "product_id": "1729587769570529799",
+      "title": "3 Bottles of Goli Ashwagandha & Vitamin D Gummy - Mixed Berry, KSM-66, Vegan, Plant Based, Non-GMO, Gluten & Gelatin Free",
+      "price": 44.98,
+      "currency": "USD",
+      "image_url": "https://p16-oec-general-useast5.ttcdn-us.com/tos-useast5-i-omjb5zjo8w-tx/b0d9acd7ae184c8d89e2e498941485b6~tplv-fhlh96nyum-crop-webp:500:500.webp?dr=12190&t=555f072d&ps=933b5bde&shp=837c8b87&shcp=9b759fb9&idc=useast5&from=2205977479",
+      "rating": 4.7,
+      "review_count": 71731,
+      "shop_id": "7495794203056835079"
+    },
+    {
+      "product_id": "1729589345444205063",
+      "title": "3 Bottles of Goli Best Seller Bundle: Ashwagandha KSM-66, Apple Cider Vinegar, Matcha Mind supplement with Cognizin, Vitamins D2 and B12",
+      "price": 30.85,
+      "currency": "USD",
+      "image_url": "https://p16-oec-general-useast5.ttcdn-us.com/tos-useast5-i-omjb5zjo8w-tx/7a85d8aa9e2c4faab75a09fd9e5bff42~tplv-fhlh96nyum-crop-webp:500:500.webp?dr=12190&t=555f072d&ps=933b5bde&shp=837c8b87&shcp=9b759fb9&idc=useast5&from=2205977479",
+      "rating": 4.6,
+      "review_count": 41238,
+      "shop_id": "7495794203056835079"
+    },
+    {
+      "product_id": "1729527774874997255",
+      "title": "Goli Pre, Post, Probiotics Gummy - World's First 3-in-1 Gluten-Free, Vegan, Non-GMO, and Gelatin-Free.",
+      "price": 14.98,
+      "currency": "USD",
+      "image_url": "https://p16-oec-general-useast5.ttcdn-us.com/tos-useast5-i-omjb5zjo8w-tx/3939c5be64484010b5c2a3183ecfbec3~tplv-fhlh96nyum-crop-webp:500:500.webp?dr=12190&t=555f072d&ps=933b5bde&shp=837c8b87&shcp=9b759fb9&idc=useast5&from=2205977479",
+      "rating": 4.5,
+      "review_count": 11658,
+      "shop_id": "7495794203056835079"
+    }
+  ],
+  "pagination": {
+    "has_more": true,
+    "cursor": "WzM2OTM5LCIxNzMxMTczNzAzNDc1OTU4Mjc5Il0="
+  }
+}

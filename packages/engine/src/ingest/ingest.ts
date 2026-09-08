@@ -23,6 +23,7 @@ import { directFetchProvider } from "./providers/direct-fetch.js";
 import { platformProviders } from "./providers/platforms.js";
 import { playwrightProvider } from "./providers/playwright.js";
 import { readerProviders } from "./providers/reader.js";
+import { tiktokShopApiProvider } from "./providers/tiktok-shop-api.js";
 import type { Provider, ProviderContext } from "./providers/types.js";
 import { waybackProvider } from "./providers/wayback.js";
 
@@ -39,7 +40,7 @@ export interface IngestOptions {
 }
 
 export function defaultProviders(): Provider[] {
-  return [directFetchProvider, ...platformProviders, ...readerProviders, waybackProvider, playwrightProvider].sort((a, b) => a.priority - b.priority);
+  return [directFetchProvider, tiktokShopApiProvider, ...platformProviders, ...readerProviders, waybackProvider, playwrightProvider].sort((a, b) => a.priority - b.priority);
 }
 
 export async function ingestUrls(urls: DetectedUrl[], opts: IngestOptions, meta: { discovered?: boolean; discoveredFrom?: Map<string, string> } = {}): Promise<SourceSignals[]> {

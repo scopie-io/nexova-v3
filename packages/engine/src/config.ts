@@ -51,6 +51,16 @@ export interface EngineConfig {
   wayback: boolean;
   /** Max screenshots / images sent to vision per job. */
   maxVisionImages: number;
+
+  // ---- TikTok Shop (RapidAPI) ----
+  /** RapidAPI key for the TikTok Shop API provider: the only strategy that returns real TikTok Shop catalogs. */
+  rapidApiKey: string | null;
+  /** Regions tried, in order, when a TikTok Shop link does not say which market it belongs to. */
+  tiktokShopRegions: string[];
+  /** Catalog pages (20 products each) fetched per shop; every page costs one API credit. */
+  tiktokShopMaxPages: number;
+  /** Products per shop enriched with full details (photos, description, variants, stock); one credit each. */
+  tiktokShopDetails: number;
 }
 
 const EFFORTS: Effort[] = ["low", "medium", "high", "xhigh", "max"];
@@ -93,6 +103,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, rootDir = proce
     maxDiscovered: clampInt(env.NEXOVA_MAX_DISCOVERED, 6, 0, 20),
     wayback: env.NEXOVA_WAYBACK !== "0",
     maxVisionImages: clampInt(env.NEXOVA_MAX_VISION_IMAGES, 20, 0, 60),
+    rapidApiKey: realSecret(env.RAPIDAPI_KEY) ?? realSecret(env.NEXOVA_RAPIDAPI_KEY),
+    tiktokShopRegions: (env.NEXOVA_TIKTOK_SHOP_REGIONS || "MY,SG,US").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean),
+    tiktokShopMaxPages: clampInt(env.NEXOVA_TIKTOK_SHOP_MAX_PAGES, 3, 1, 25),
+    tiktokShopDetails: clampInt(env.NEXOVA_TIKTOK_SHOP_DETAILS, 6, 0, 60),
   };
 }
 
@@ -102,6 +116,13 @@ function hasCredential(env: NodeJS.ProcessEnv): boolean {
   const token = (env.ANTHROPIC_AUTH_TOKEN ?? "").trim();
   const real = (v: string) => v.length >= 20 && !/\.\.\.$/.test(v) && !/^(your|sk-ant-\.\.\.|changeme|xxx)/i.test(v);
   return real(key) || real(token);
+}
+
+/** A secret that is actually set, not the placeholder from .env.example. */
+function realSecret(raw: string | undefined): string | null {
+  const v = (raw ?? "").trim();
+  if (v.length < 16 || /\.\.\.$/.test(v) || /^(your|changeme|xxx)/i.test(v)) return null;
+  return v;
 }
 
 function clampInt(raw: string | undefined, fallback: number, min: number, max: number): number {

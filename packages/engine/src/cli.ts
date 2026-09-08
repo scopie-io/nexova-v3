@@ -144,6 +144,7 @@ async function main(): Promise<void> {
       console.log(`  fallbacks     ${c.fallbacks === "default" ? "default (auto-route on refusal)" : c.fallbacks ? c.fallbacks.model : "disabled"}`);
       console.log(`  reader        ${c.reader}${c.firecrawlApiKey ? " (firecrawl key set)" : ""}${c.jinaApiKey ? " (jina key set)" : ""}${c.proxyUrlTemplate ? " (proxy set)" : ""}`);
       console.log(`  browser       ${c.browser ? "on (playwright)" : "off"}`);
+      console.log(`  tiktok shop   ${c.rapidApiKey ? `RapidAPI key set (regions ${c.tiktokShopRegions.join(",")}, ${c.tiktokShopMaxPages} page${c.tiktokShopMaxPages === 1 ? "" : "s"}, ${c.tiktokShopDetails} detail lookups per shop)` : "off — set RAPIDAPI_KEY to read real TikTok Shop catalogs"}`);
       console.log(`  discovery     ${c.discovery ? `on (max ${c.maxDiscovered}${c.searchDiscovery ? ", with search" : ""})` : "off"}`);
       console.log(`  wayback       ${c.wayback ? "on" : "off"}`);
       console.log(`  vision images ${c.maxVisionImages}/job`);

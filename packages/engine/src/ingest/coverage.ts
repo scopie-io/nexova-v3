@@ -40,6 +40,11 @@ export function buildCoverage(sources: SourceSignals[], attachments: AttachmentE
       if (!has) recommendations.push(`${label} blocks automated reading. Attach 2–6 screenshots of your ${label} ${s.kind === "shop" ? "shop page and product list" : s.kind === "product" ? "product page" : "profile and products"} (phone screenshots are fine) so the AI can read them directly.`);
     } else recommendations.push(`Check that ${s.url} is public and reachable, or paste another link to the same shop.`);
   }
+  const quotaHit = sources.find((s) => s.errors.some((e) => /RapidAPI quota exhausted/i.test(e)));
+  if (quotaHit) {
+    gaps.push("The TikTok Shop API (RapidAPI) quota is used up, so TikTok Shop listings could not be fetched directly.");
+    recommendations.push("Upgrade the RapidAPI plan for the TikTok Shop API (or wait for its monthly reset) and rebuild; TikTok Shop links then return the full catalog automatically.");
+  }
   const thinShops = sources.filter((s) => (s.status === "partial" || s.status === "ok") && (s.kind === "shop" || s.kind === "website" || s.kind === "product") && s.products.length < 3);
   for (const s of thinShops) {
     const label = platformLabel(s.platform);

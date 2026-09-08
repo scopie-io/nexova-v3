@@ -3,6 +3,7 @@ import type { EngineConfig } from "../config.js";
 import { emptySignals, type SourceSignals } from "../schema/signals.js";
 import { readJsonOrNull, writeJson } from "../util/fsx.js";
 import { sha256 } from "../util/ids.js";
+import { isThinSource } from "./providers/types.js";
 
 interface CacheEntry {
   savedAt: string;
@@ -25,8 +26,9 @@ export class SourceCache {
     if (!entry || (entry.version ?? 1) !== CACHE_VERSION) return null;
     const ageMs = Date.now() - new Date(entry.savedAt).getTime();
     if (ageMs > this.config.cacheTtlHours * 3600_000) return null;
-    // Only reuse useful results; blocked/failed sources should be retried.
-    if (entry.signals.status === "blocked" || entry.signals.status === "failed") return null;
+    // Only reuse useful results; blocked/failed/thin sources should be retried (a shop that yielded
+    // nothing may succeed next time, e.g. once an API quota resets or a platform stops rate-limiting).
+    if (entry.signals.status === "blocked" || entry.signals.status === "failed" || isThinSource(entry.signals)) return null;
     const base = emptySignals(entry.signals, entry.signals.input, entry.signals.id);
     return { ...base, ...entry.signals, fromCache: true, screenshots: [] };
   }

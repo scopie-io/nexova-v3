@@ -82,6 +82,10 @@ function canonicalUrl(det: DetectedUrl): string {
       if (det.kind === "profile" && h) return `https://www.tiktok.com/@${h}`;
       if (det.kind === "post" && h && det.externalId) return `https://www.tiktok.com/@${h}/video/${det.externalId}`;
       return det.url;
+    case "tiktok_shop":
+      if (det.kind === "product" && det.externalId) return `https://www.tiktok.com/view/product/${det.externalId}${det.region ? `?region=${det.region.toUpperCase()}` : ""}`;
+      if (det.kind === "shop" && h && det.externalId) return `https://www.tiktok.com/shop/store/${h}/${det.externalId}`;
+      return det.url;
     case "instagram":
       if (det.kind === "profile" && h) return `https://www.instagram.com/${h}/`;
       if (det.kind === "post" && det.externalId) return `https://www.instagram.com/p/${det.externalId}/`;
@@ -106,8 +110,20 @@ function classifyRaw(input: string): DetectedUrl | null {
   // ---- TikTok ----
   if (/(^|\.)tiktok\.com$/.test(bare) || bare === "vt.tiktok.com" || bare === "vm.tiktok.com") {
     if (bare.startsWith("shop.") || parts[0] === "shop" || parts[0] === "view") {
-      const pid = parts.includes("product") ? parts[parts.indexOf("product") + 1] ?? null : null;
-      return { ...base, platform: "tiktok_shop", kind: pid ? "product" : "shop", externalId: pid };
+      // Region: ?region=MY, or the market prefix on shop.tiktok.com/<cc>/pdp/<id>
+      const regionParam = u.searchParams.get("region")?.toLowerCase() ?? null;
+      const pathRegion = bare.startsWith("shop.") && /^[a-z]{2}$/i.test(parts[0] ?? "") ? parts[0].toLowerCase() : null;
+      const region = regionParam ?? pathRegion ?? base.region;
+      const after = (key: string) => (parts.includes(key) ? parts[parts.indexOf(key) + 1] ?? null : null);
+      const pid = after("product") ?? after("pdp");
+      if (pid) return { ...base, region, platform: "tiktok_shop", kind: "product", externalId: pid };
+      // Store pages: /shop/store/<slug>/<numeric id>
+      if (parts[0] === "shop" && parts[1] === "store") {
+        const storeId = parts.slice(2).find((p) => /^\d{6,}$/.test(p)) ?? null;
+        const slug = parts[2] && parts[2] !== storeId ? parts[2] : null;
+        return { ...base, region, platform: "tiktok_shop", kind: "shop", handle: slug, externalId: storeId };
+      }
+      return { ...base, region, platform: "tiktok_shop", kind: "shop" };
     }
     if (bare === "vt.tiktok.com" || bare === "vm.tiktok.com") {
       return { ...base, platform: "tiktok", kind: "post", externalId: parts[0] ?? null };

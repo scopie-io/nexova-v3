@@ -9,6 +9,8 @@ import type { RawProduct } from "../schema/signals.js";
 export function precedence(via: string): number {
   if (via === "csv" || via === "json") return 100;
   if (via.startsWith("shopify-products-json")) return 96;
+  if (via.startsWith("tiktok-shop-api-showcase")) return 88;
+  if (via.startsWith("tiktok-shop-api")) return 95;
   if (via.startsWith("shopee-api") || via.startsWith("lazada-ajax")) return 94;
   if (via === "jsonld" || via.endsWith("-jsonld")) return 90;
   if (via.startsWith("embedded")) return 86;
