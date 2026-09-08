@@ -25,7 +25,8 @@ const scratch = await fs.mkdtemp(path.join(os.tmpdir(), "sharp-arm64-"));
 await fs.writeFile(path.join(scratch, "package.json"), JSON.stringify({ name: "sharp-arm64-scratch", private: true }));
 const specs = wanted.map(([name, version]) => `${name}@${version}`).join(" ");
 console.log(`installing ${specs} for linux/arm64 into ${scratch}`);
-execSync(`npm install --no-audit --no-fund --no-package-lock --include=optional --os=linux --cpu=arm64 ${specs}`, { cwd: scratch, stdio: "inherit" });
+// --force: npm otherwise refuses a package whose declared cpu/os differs from the build machine's.
+execSync(`npm install --no-audit --no-fund --no-package-lock --include=optional --force --os=linux --cpu=arm64 ${specs}`, { cwd: scratch, stdio: "inherit" });
 const dest = path.join(root, "node_modules", "@img");
 await fs.mkdir(dest, { recursive: true });
 for (const [name] of wanted) {
