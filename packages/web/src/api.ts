@@ -110,8 +110,9 @@ export const api = {
     };
     for (const t of ["status", "step", "log", "usage", "progress", "done", "error"]) es.addEventListener(t, handler as EventListener);
     es.onerror = () => {
-      es.close();
-      onClose();
+      // Hosted functions cut long streams; the browser reconnects on its own with Last-Event-ID and the
+      // server resumes from there. Only a permanent failure (readyState CLOSED) ends the subscription.
+      if (es.readyState === EventSource.CLOSED) onClose();
     };
     return () => es.close();
   },

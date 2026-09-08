@@ -393,7 +393,23 @@ function BuildView({ job: initial, onNew, onRebuild, templates }: { job: Job; on
       },
       () => api.job(initial.id).then(setJob).catch(() => {}),
     );
-    return stop;
+    // Safety net: the record is the source of truth, so poll it while the job is active in case the
+    // stream misses a beat (reconnects, hosted stream limits).
+    const poll = setInterval(() => {
+      api.job(initial.id)
+        .then((latest) => {
+          setJob((j) => (latest.updatedAt > j.updatedAt ? latest : j));
+          if (latest.status !== "queued" && latest.status !== "running") {
+            clearInterval(poll);
+            api.coverage(initial.id).then(setCoverage).catch(() => {});
+          }
+        })
+        .catch(() => {});
+    }, 15_000);
+    return () => {
+      stop();
+      clearInterval(poll);
+    };
   }, [initial.id]);
 
   useEffect(() => {
