@@ -146,7 +146,8 @@ export function createApp(opts: AppOptions): Hono {
 
   app.get("/api/health", async (c) => {
     const templates = await engine.templates();
-    return c.json({ ok: true, model: engine.config.model, effort: engine.config.effort, offline: engine.config.offline, gateway: engine.gateway.id, deployer: engine.deployer.id, storage: engine.storage.id, runner: launcher.id, templates: templates.map((t) => t.manifest.id), publicUrl: engine.config.publicUrl, tiktokShopApi: !!engine.config.rapidApiKey });
+    const publisher = engine.deployer.check ? await engine.deployer.check().catch((err: unknown) => ({ ok: false, detail: err instanceof Error ? err.message : String(err) })) : { ok: true, detail: engine.deployer.id };
+    return c.json({ ok: true, model: engine.config.model, effort: engine.config.effort, offline: engine.config.offline, gateway: engine.gateway.id, deployer: engine.deployer.id, publisher, storage: engine.storage.id, runner: launcher.id, templates: templates.map((t) => t.manifest.id), publicUrl: engine.config.publicUrl, tiktokShopApi: !!engine.config.rapidApiKey });
   });
 
   app.get("/api/templates", async (c) => {

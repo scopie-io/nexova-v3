@@ -66,6 +66,26 @@ export class VercelDeployer implements Deployer {
     return (await res.json()) as T;
   }
 
+  private checked: { at: number; result: { ok: boolean; detail: string } } | null = null;
+
+  /** Verifies the token can see the team's projects; cached for five minutes. */
+  async check(): Promise<{ ok: boolean; detail: string }> {
+    if (this.checked && Date.now() - this.checked.at < 5 * 60_000) return this.checked.result;
+    let result: { ok: boolean; detail: string };
+    if (!this.config.vercelToken) result = { ok: false, detail: "no token (set NEXOVA_VERCEL_TOKEN)" };
+    else {
+      try {
+        const res = await fetch(this.withTeam(`/v9/projects?limit=1`), { headers: { authorization: `Bearer ${this.token}` } });
+        if (res.ok) result = { ok: true, detail: `token ok (${this.config.vercelToken.length} chars, team ${this.config.vercelTeamId ?? "personal"})` };
+        else result = { ok: false, detail: `HTTP ${res.status}: ${(await res.text()).slice(0, 160)} (token length ${this.config.vercelToken.length})` };
+      } catch (err) {
+        result = { ok: false, detail: err instanceof Error ? err.message : String(err) };
+      }
+    }
+    this.checked = { at: Date.now(), result };
+    return result;
+  }
+
   async ensureProject(slug: string, framework: string | null): Promise<VercelProject> {
     const name = this.projectName(slug);
     try {

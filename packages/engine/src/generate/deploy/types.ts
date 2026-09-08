@@ -42,4 +42,6 @@ export interface Deployer {
   deploy(input: DeployInput): Promise<DeployResult>;
   /** Publish from source and let the host run the build (no local Node build needed). */
   deploySource?(input: DeploySourceInput): Promise<DeployResult>;
+  /** Cheap credential/connectivity check for the health endpoint and doctor. */
+  check?(): Promise<{ ok: boolean; detail: string }>;
 }
