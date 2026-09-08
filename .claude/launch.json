@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "nexova-server",
+      "runtimeExecutable": "C:/Users/nurfa/nexova/scripts/dev-server.cmd",
+      "runtimeArgs": [],
+      "port": 4000
+    },
+    {
+      "name": "nexova-web",
+      "runtimeExecutable": "C:/Users/nurfa/nexova/scripts/dev-web.cmd",
+      "runtimeArgs": [],
+      "port": 5173
+    }
+  ]
+}

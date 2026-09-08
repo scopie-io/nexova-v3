@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "id": "sample",
+  "slug": "sample-store",
+  "brand": {
+    "name": "Sample Store",
+    "handle": "samplestore",
+    "tagline": "Small batch, big love",
+    "description": "A sample store rendered by the Nexova starter template. The engine replaces this file with your real store.",
+    "story": "We started at the kitchen table and grew with our community on social media. Every product is made in small batches and shipped by our own team.",
+    "logo": null,
+    "avatar": null,
+    "heroImage": null,
+    "industry": "handmade",
+    "audience": "",
+    "tone": "warm",
+    "values": [],
+    "location": { "country": "MY", "city": null },
+    "contact": { "email": null, "phone": null, "whatsapp": "60123456789", "address": null },
+    "followers": null
+  },
+  "theme": {
+    "preset": "clean",
+    "mode": "light",
+    "colors": { "primary": "#111111", "secondary": "#6b7280", "accent": "#7c3aed", "background": "#ffffff", "surface": "#f6f6f7", "text": "#111111", "muted": "#6b7280" },
+    "fonts": { "heading": "Inter", "body": "Inter" },
+    "radius": "md"
+  },
+  "social": { "tiktok": "https://www.tiktok.com/@samplestore", "tiktokShop": null, "instagram": "https://www.instagram.com/samplestore/", "facebook": null, "shopee": null, "lazada": null, "whatsapp": "https://wa.me/60123456789", "telegram": null, "youtube": null, "x": null, "website": null, "email": null },
+  "catalog": {
+    "products": [
+      {
+        "id": "soy-candle-lavender",
+        "slug": "soy-candle-lavender",
+        "title": "Lavender Soy Candle",
+        "description": "Hand-poured soy wax candle with a calming lavender scent. Burns for about 40 hours.",
+        "shortDescription": "Hand-poured soy candle, 40h burn time.",
+        "price": { "amount": 45, "currency": "MYR" },
+        "compareAtPrice": { "amount": 55, "currency": "MYR" },
+        "images": [],
+        "options": [{ "name": "Size", "values": ["Small", "Large"] }],
+        "variants": [
+          { "id": "soy-candle-lavender-v1", "title": "Small", "options": { "Size": "Small" }, "price": { "amount": 45, "currency": "MYR" }, "compareAtPrice": null, "sku": null, "image": null, "inventory": { "track": false, "quantity": null, "status": "in_stock" } },
+          { "id": "soy-candle-lavender-v2", "title": "Large", "options": { "Size": "Large" }, "price": { "amount": 69, "currency": "MYR" }, "compareAtPrice": null, "sku": null, "image": null, "inventory": { "track": false, "quantity": null, "status": "in_stock" } }
+        ],
+        "inventory": { "track": false, "quantity": null, "status": "in_stock" },
+        "categories": ["candles"],
+        "tags": ["bestseller"],
+        "attributes": { "Material": "Soy wax" },
+        "featured": true,
+        "rating": { "average": 4.8, "count": 32 },
+        "soldCount": 120,
+        "source": { "platform": "text", "url": null, "externalId": null },
+        "confidence": 0.9,
+        "visible": true
+      },
+      {
+        "id": "ceramic-mug",
+        "slug": "ceramic-mug",
+        "title": "Speckled Ceramic Mug",
+        "description": "Wheel-thrown stoneware mug with a speckled glaze. Holds 350ml. Dishwasher safe.",
+        "shortDescription": "Wheel-thrown stoneware, 350ml.",
+        "price": { "amount": 58, "currency": "MYR" },
+        "compareAtPrice": null,
+        "images": [],
+        "options": [],
+        "variants": [],
+        "inventory": { "track": false, "quantity": null, "status": "in_stock" },
+        "categories": ["home"],
+        "tags": [],
+        "attributes": {},
+        "featured": true,
+        "rating": null,
+        "soldCount": null,
+        "source": { "platform": "text", "url": null, "externalId": null },
+        "confidence": 0.9,
+        "visible": true
+      }
+    ],
+    "categories": [
+      { "slug": "candles", "name": "Candles", "description": "", "image": null },
+      { "slug": "home", "name": "Home", "description": "", "image": null }
+    ],
+    "collections": []
+  },
+  "pages": {
+    "home": {
+      "heroTitle": "Small batch, big love",
+      "heroSubtitle": "Handmade candles and ceramics, shipped from our studio to your door.",
+      "heroCta": "Shop now",
+      "announcement": "Free shipping on orders over RM150",
+      "featuredProductIds": ["soy-candle-lavender", "ceramic-mug"],
+      "sections": [
+        { "type": "usp", "title": "", "subtitle": "" },
+        { "type": "featured", "title": "Featured", "subtitle": "Our most loved pieces" },
+        { "type": "categories", "title": "Shop by category", "subtitle": "" },
+        { "type": "story", "title": "Our story", "subtitle": "" },
+        { "type": "faq", "title": "FAQ", "subtitle": "" },
+        { "type": "socials", "title": "Follow along", "subtitle": "" }
+      ],
+      "usps": [
+        { "title": "Handmade", "text": "Every piece is made by hand in small batches." },
+        { "title": "Fast shipping", "text": "Orders ship within 2 working days." },
+        { "title": "Chat with us", "text": "Questions? We reply on WhatsApp." }
+      ]
+    },
+    "about": { "title": "About us", "body": "We are a small studio making candles and ceramics." },
+    "faq": [
+      { "question": "How do I order?", "answer": "Tap Buy on any product and confirm your order with us on WhatsApp." },
+      { "question": "Do you ship nationwide?", "answer": "Yes, we ship everywhere in Malaysia." }
+    ],
+    "testimonials": [],
+    "contact": { "title": "Contact", "body": "" }
+  },
+  "commerce": {
+    "currency": "MYR",
+    "locale": "en",
+    "checkout": { "mode": "whatsapp", "whatsappNumber": "60123456789", "externalUrl": null },
+    "shipping": { "note": "", "regions": ["MY"], "freeShippingThreshold": 150 },
+    "policies": { "returns": "", "privacy": "", "terms": "" }
+  },
+  "seo": { "title": "Sample Store", "description": "Handmade candles and ceramics.", "keywords": [], "ogImage": null },
+  "template": { "id": "nexova-starter", "reason": "sample" },
+  "sources": [],
+  "meta": { "engineVersion": "0.1.0", "generatedAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-01T00:00:00.000Z", "confidence": 1, "warnings": [] }
+}

@@ -1,0 +1,15 @@
+/* Default theme. The Nexova engine overwrites this file with the store's theme. */
+:root {
+  --nx-primary: #111111;
+  --nx-secondary: #6b7280;
+  --nx-accent: #7c3aed;
+  --nx-bg: #ffffff;
+  --nx-surface: #f6f6f7;
+  --nx-text: #111111;
+  --nx-muted: #6b7280;
+  --nx-font-heading: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --nx-font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --nx-radius: 10px;
+  --nx-preset: clean;
+  color-scheme: light;
+}

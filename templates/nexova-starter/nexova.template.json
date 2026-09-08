@@ -1,0 +1,14 @@
+{
+  "id": "nexova-starter",
+  "name": "Nexova Starter",
+  "version": "1.0.0",
+  "description": "Clean, fast reference storefront. Hero, featured products, categories, product pages with variants, WhatsApp checkout, about, FAQ and social footer.",
+  "style": { "tags": ["clean", "minimal", "modern"], "mode": "both", "preset": "clean" },
+  "industries": ["any"],
+  "features": { "variants": true, "collections": false, "reviews": true, "blog": false, "search": true, "cart": true, "whatsappCheckout": true },
+  "entry": { "dataFile": "src/nexova/store.json", "themeFile": "src/nexova/theme.css", "publicDir": "public" },
+  "build": { "install": "npm install --no-audit --no-fund", "build": "npm run build", "outDir": "dist", "dev": "npm run dev", "basePathEnv": "NEXOVA_BASE_PATH" },
+  "preview": null,
+  "minProducts": 0,
+  "maxProducts": null
+}

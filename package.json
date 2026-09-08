@@ -1,0 +1,26 @@
+{
+  "name": "nexova",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Nexova: paste social links or products, get a live e-commerce website. Claude-powered engine.",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @nexova/engine && npm run build -w @nexova/server && npm run build -w @nexova/web",
+    "dev": "npm run dev -w @nexova/server",
+    "start": "npm run start -w @nexova/server",
+    "serve": "npm run build && npm run start -w @nexova/server",
+    "doctor": "node packages/engine/dist/cli.js doctor",
+    "test": "npm run test -w @nexova/engine",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "nexova": "node packages/engine/dist/cli.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0"
+  }
+}
