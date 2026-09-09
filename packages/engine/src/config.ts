@@ -77,14 +77,6 @@ export interface EngineConfig {
   /** Products per shop enriched with full details (photos, description, variants, stock); one credit each. */
   tiktokShopDetails: number;
 
-  // ---- Shopee (RapidAPI) ----
-  /**
-   * Wall-clock budget for one Shopee scrape job, submit plus polling. Measured on a real MY shop:
-   * ~47s before the submit returns a job id, ~162s to completion. This runs in its own pipeline
-   * stage after the store is live, not in the ingest ladder, so it is free to wait minutes.
-   */
-  shopeeScraperTimeoutMs: number;
-
   // ---- storage ----
   /** Where state lives: "fs" (data/ and stores/ on disk) or "vercel" (Neon Postgres + Vercel Blob). */
   storage: StorageMode;
@@ -157,7 +149,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, rootDir = proce
     tiktokShopRegions: (env.NEXOVA_TIKTOK_SHOP_REGIONS || "MY,SG,US").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean),
     tiktokShopMaxPages: clampInt(env.NEXOVA_TIKTOK_SHOP_MAX_PAGES, 3, 1, 25),
     tiktokShopDetails: clampInt(env.NEXOVA_TIKTOK_SHOP_DETAILS, 6, 0, 60),
-    shopeeScraperTimeoutMs: clampInt(env.NEXOVA_SHOPEE_TIMEOUT_MS, 240_000, 5_000, 900_000),
     storage: (() => {
       const raw = (env.NEXOVA_STORAGE || "auto").toLowerCase();
       const cloud = !!env.DATABASE_URL?.trim() && !!env.BLOB_READ_WRITE_TOKEN?.trim();
