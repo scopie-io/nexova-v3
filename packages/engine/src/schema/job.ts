@@ -9,6 +9,7 @@ export const STEP_NAMES = [
   "research",
   "normalize",
   "assets",
+  "preview",
   "enrich",
   "template",
   "compose",
@@ -40,6 +41,12 @@ export interface JobOptions {
   skipResearch?: boolean;
   /** Skip link discovery (bio links, on-page links, search). */
   skipDiscovery?: boolean;
+  /**
+   * "auto" (default) takes the fast path when a marketplace API already returned a structured
+   * catalog: research and per-product Claude normalization are skipped. "off" always runs the
+   * full ladder, which is what to use when comparing quality between the two.
+   */
+  fastPath?: "auto" | "off";
   /** Preferred store slug. */
   slug?: string | null;
   /** Preferred currency override. */
@@ -71,6 +78,8 @@ export interface JobRecord {
   slug: string | null;
   templateId: string | null;
   siteUrl: string | null;
+  /** True while siteUrl points at the pre-enrichment publish and a better one is still coming. */
+  preview: boolean;
   usage: UsageSummary;
   error: string | null;
   createdAt: string;
@@ -81,12 +90,21 @@ export interface JobRecord {
   runId?: string | null;
 }
 
+/** Just enough of a product to render a card mid-build. */
+export interface JobProductPreview {
+  title: string;
+  priceText: string;
+  image: string | null;
+}
+
 export type JobEvent =
   | { type: "status"; jobId: string; status: JobStatus; at: string }
   | { type: "step"; jobId: string; step: StepState; at: string }
   | { type: "log"; jobId: string; record: LogRecord; at: string }
   | { type: "usage"; jobId: string; usage: UsageSummary; at: string }
   | { type: "progress"; jobId: string; step: StepName; message: string; at: string }
+  /** A few products as soon as ingestion finds them, so the merchant sees real content while waiting. */
+  | { type: "products"; jobId: string; products: JobProductPreview[]; total: number; at: string }
   | { type: "done"; jobId: string; job: JobRecord; at: string }
   | { type: "error"; jobId: string; error: string; at: string };
 

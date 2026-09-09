@@ -16,6 +16,12 @@ export interface EngineConfig {
   /** Effort for the web-research step, which is browsing-bound rather than reasoning-bound. */
   researchEffort: Effort;
   /**
+   * Effort per Claude step, overriding `effort` where a step does not need the reasoning.
+   * Keys are gateway step names: "normalize-store", "normalize-products", "enrich", "vision".
+   * Set NEXOVA_EFFORT_NORMALIZE / NEXOVA_EFFORT_ENRICH to trade output polish for latency.
+   */
+  stepEfforts: Record<string, Effort>;
+  /**
    * Server-side refusal fallback: "default" lets Anthropic route by refusal category,
    * { model } pins a specific fallback model, null disables the feature.
    */
@@ -23,6 +29,14 @@ export interface EngineConfig {
   /** When true, never call Claude; use the deterministic offline gateway (tests / no key yet). */
   offline: boolean;
   maxProducts: number;
+  /**
+   * Trust a marketplace API's own catalog: skip web research and per-product Claude
+   * normalization when the catalog already arrived structured. Off means every job takes
+   * the full ladder regardless of how good its sources were.
+   */
+  fastPath: boolean;
+  /** Publish once before enrichment so the merchant sees a live store sooner. */
+  earlyPublish: boolean;
   cacheTtlHours: number;
   /** Enable the optional Playwright provider (requires the `playwright` package). */
   browser: boolean;
@@ -94,9 +108,26 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, rootDir = proce
       const raw = (env.NEXOVA_RESEARCH_EFFORT || "medium").toLowerCase() as Effort;
       return EFFORTS.includes(raw) ? raw : "medium";
     })(),
+    stepEfforts: (() => {
+      const pick = (raw: string | undefined): Effort | null => {
+        const v = (raw ?? "").trim().toLowerCase() as Effort;
+        return EFFORTS.includes(v) ? v : null;
+      };
+      const normalize = pick(env.NEXOVA_EFFORT_NORMALIZE);
+      const enrich = pick(env.NEXOVA_EFFORT_ENRICH);
+      const out: Record<string, Effort> = {};
+      if (normalize) {
+        out["normalize-store"] = normalize;
+        out["normalize-products"] = normalize;
+      }
+      if (enrich) out.enrich = enrich;
+      return out;
+    })(),
     fallbacks,
     offline: env.NEXOVA_OFFLINE === "1" || (!hasCredential(env) && env.NEXOVA_OFFLINE !== "0"),
     maxProducts: clampInt(env.NEXOVA_MAX_PRODUCTS, 60, 1, 500),
+    fastPath: env.NEXOVA_FAST_PATH !== "0",
+    earlyPublish: env.NEXOVA_EARLY_PUBLISH !== "0",
     cacheTtlHours: clampInt(env.NEXOVA_CACHE_TTL_HOURS, 24, 0, 24 * 30),
     browser: env.NEXOVA_BROWSER === "1",
     publicUrl: (env.NEXOVA_PUBLIC_URL || `http://localhost:${env.PORT || 4000}`).replace(/\/+$/, ""),

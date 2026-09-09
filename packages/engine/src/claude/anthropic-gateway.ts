@@ -101,7 +101,7 @@ export class AnthropicGateway implements ClaudeGateway {
             fallbacks: this.fallbacks(),
             system: this.system(params.system),
             thinking: { type: "adaptive" },
-            output_config: { effort: this.config.effort, format: betaZodOutputFormat(params.schema) },
+            output_config: { effort: this.config.stepEfforts[params.step] ?? this.config.effort, format: betaZodOutputFormat(params.schema) },
             messages: [{ role: "user", content: params.user }],
           },
           { signal: params.ctx.signal },

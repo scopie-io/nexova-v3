@@ -38,6 +38,7 @@ export class JobStore {
       slug: options.slug ?? null,
       templateId: options.templateId ?? null,
       siteUrl: null,
+      preview: false,
       usage: emptyUsage(),
       error: null,
       createdAt: now,

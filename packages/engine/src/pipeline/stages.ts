@@ -12,7 +12,7 @@
 import path from "node:path";
 import type { GatewayContext } from "../claude/gateway.js";
 import { NexovaError } from "../claude/gateway.js";
-import { applyEnrichment, buildSpec, evidenceFromSignals } from "../claude/mapping.js";
+import { applyEnrichment, buildSpec, evidenceFromSignals, productsFromSignals } from "../claude/mapping.js";
 import { chooseTemplateByRules } from "../claude/offline-gateway.js";
 import { CURRENCY_BY_REGION, LOCALE_BY_REGION, detectInput, expandShortLinks } from "../ingest/detect.js";
 import { assemble, captureAttachments, ingestUrls, processAttachments, runDiscovery } from "../ingest/ingest.js";
@@ -21,16 +21,19 @@ import { localizeAssets } from "../generate/assets.js";
 import { buildSite } from "../generate/build.js";
 import { composeSite, composeSiteFiles } from "../generate/compose.js";
 import type { StoreDraft, ProductDraft } from "../schema/drafts.js";
-import type { JobEvent, JobRecord, StepName, StepState } from "../schema/job.js";
+import type { JobEvent, JobProductPreview, JobRecord, StepName, StepState } from "../schema/job.js";
 import type { TemplateEntry } from "../schema/manifest.js";
 import type { AttachmentExtract, DetectedUrl, IngestInput, IngestResult, RawProduct, ResearchFindings, SourceSignals } from "../schema/signals.js";
 import { parseStoreSpec, type SourceRecord, type StoreSpec } from "../schema/store-spec.js";
 import { errorMessage, type Logger } from "../util/log.js";
-import { withTimeout } from "../util/retry.js";
+import { mapLimit, withTimeout } from "../util/retry.js";
 import type { PipelineDeps } from "./pipeline.js";
 
 /** Products per normalization call. Kept modest so one batch's JSON stays inside the output budget. */
 export const PRODUCT_BATCH = 12;
+
+/** Product batches to normalize at once. Bounded so a big catalog does not trip rate limits. */
+const NORMALIZE_CONCURRENCY = 3;
 
 export class StepFailure extends Error {
   constructor(
@@ -55,6 +58,20 @@ export interface StageContext {
 
 export function progress(ctx: StageContext, step: StepName, message: string): void {
   ctx.publish({ type: "progress", jobId: ctx.job.id, step, message, at: new Date().toISOString() });
+}
+
+/**
+ * Push the first products onto the merchant's screen as soon as ingestion has them. The rest of
+ * the build takes minutes; a grid of their own products beats a spinner while it runs.
+ */
+export function publishProducts(ctx: StageContext, ingest: IngestResult): void {
+  if (!ingest.products.length) return;
+  const products: JobProductPreview[] = ingest.products.slice(0, 12).map((p) => ({
+    title: p.title,
+    priceText: p.priceText ?? (typeof p.price === "number" && p.price > 0 ? `${p.currency ?? ""} ${p.price}`.trim() : ""),
+    image: p.images?.find((u) => /^https?:\/\//i.test(u)) ?? null,
+  }));
+  ctx.publish({ type: "products", jobId: ctx.job.id, products, total: ingest.products.length, at: new Date().toISOString() });
 }
 
 export function gatewayCtx(ctx: StageContext, step: StepName): GatewayContext {
@@ -198,6 +215,7 @@ export async function stageAttachments(ctx: StageContext): Promise<StepOutcome> 
   const ingest = assemble(sources, input.texts, extracts, discovered, currencyHint);
   await deps.jobs.putArtifact(job, "ingest", ingest);
   await deps.jobs.putArtifact(job, "coverage", ingest.coverage);
+  publishProducts(ctx, ingest);
   const imgCount = all.filter((a) => a.kind === "image").length;
   const attNote = all.length ? `${uploads.length} upload(s)${captures.length ? ` + ${captures.length} capture(s)` : ""}: ${extracts.reduce((n, a) => n + a.products.length, 0)} products read${deps.config.offline && imgCount ? " (screenshots need Claude)" : ""}` : "no attachments";
   return `${attNote}. ${coverageSummary(ingest.coverage)}`;
@@ -208,6 +226,8 @@ export async function stageResearch(ctx: StageContext, opts: { timeoutMs?: numbe
   if (job.input.options.skipResearch) return { skip: "skipped by request" };
   if (deps.config.offline) return { skip: "offline mode (no ANTHROPIC_API_KEY)" };
   const ingest = await artifact<IngestResult>(ctx, "ingest");
+  const fast = fastPathReason(job, ingest, deps.config);
+  if (fast) return { skip: `not needed: ${fast}` };
   // Research enriches the store, it does not gate it. A timeout, a refusal or a provider
   // outage degrades this step to "skipped" instead of costing the merchant their build.
   let findings: ResearchFindings;
@@ -240,6 +260,41 @@ export function productBatches(ingest: IngestResult): RawProduct[][] {
   for (let i = 0; i < ingest.products.length; i += PRODUCT_BATCH) batches.push(ingest.products.slice(i, i + PRODUCT_BATCH));
   if (batches.length === 0) batches.push([]);
   return batches;
+}
+
+/** Providers that return a real catalog, structured, straight from the platform. */
+const CATALOG_APIS = ["tiktok-shop-api", "shopify-products-json", "shopee-api"];
+
+/**
+ * Is this job's catalog good enough to skip research and per-product normalization?
+ *
+ * Returns a human reason when it is (shown in the UI as the skip message), or null when the job
+ * must take the full ladder. Deliberately conservative: any screenshot, any pasted product line
+ * or any source the API did not cover means the merchant gave us something the API did not know
+ * about, and dropping the Claude passes would lose it.
+ */
+export function fastPathReason(job: JobRecord, ingest: IngestResult, config: PipelineDeps["config"]): string | null {
+  if (!config.fastPath || job.input.options.fastPath === "off") return null;
+  if (job.input.attachments?.length) return null;
+  if (!ingest.products.length) return null;
+
+  const covered = ingest.sources.filter((s) => s.providers.some((p) => CATALOG_APIS.includes(p)));
+  if (!covered.length) return null;
+  // Every readable source must be one the catalog API handled, or we would silently drop the rest.
+  const readable = ingest.sources.filter((s) => s.status === "ok" || s.status === "partial");
+  if (readable.some((s) => !covered.includes(s))) return null;
+
+  const api = [...new Set(covered.flatMap((s) => s.providers.filter((p) => CATALOG_APIS.includes(p))))];
+  const fromApi = ingest.products.filter((p) => CATALOG_APIS.includes(p.via)).length;
+  if (fromApi < ingest.products.length) return null;
+  return `${api.join(", ")} returned ${fromApi} products with prices and photos`;
+}
+
+/** The fast path needs no product batches; everything else batches as usual. */
+export async function plannedBatchCount(ctx: StageContext): Promise<number> {
+  const ingest = await artifact<IngestResult>(ctx, "ingest");
+  if (fastPathReason(ctx.job, ingest, ctx.deps.config)) return 0;
+  return productBatches(ingest).length;
 }
 
 export async function stageNormalizeStore(ctx: StageContext): Promise<StoreDraft> {
@@ -276,10 +331,16 @@ export async function stageBuildSpec(ctx: StageContext): Promise<StepOutcome> {
   const ingest = await artifact<IngestResult>(ctx, "ingest");
   const store = await artifact<StoreDraft>(ctx, "store.draft");
   const products: ProductDraft[] = [];
-  for (let i = 0; i < productBatches(ingest).length; i++) {
-    const batch = await optionalArtifact<ProductDraft[]>(ctx, `products.draft.${i}`);
-    if (batch) products.push(...batch);
-    if (products.length >= deps.config.maxProducts) break;
+  const fast = fastPathReason(job, ingest, deps.config);
+  if (fast) {
+    const { currencyHint } = hints(ingest, job);
+    products.push(...productsFromSignals(ingest.products, store, { maxProducts: deps.config.maxProducts, currency: currencyHint ?? store.commerce.currency }));
+  } else {
+    for (let i = 0; i < productBatches(ingest).length; i++) {
+      const batch = await optionalArtifact<ProductDraft[]>(ctx, `products.draft.${i}`);
+      if (batch) products.push(...batch);
+      if (products.length >= deps.config.maxProducts) break;
+    }
   }
   await deps.jobs.putArtifact(job, "products.draft", products);
 
@@ -287,6 +348,7 @@ export async function stageBuildSpec(ctx: StageContext): Promise<StepOutcome> {
   job.slug = slug;
   const sources: SourceRecord[] = ingest.sources.map((s) => ({ url: s.url, platform: s.platform, kind: s.kind, handle: s.handle, fetchedAt: s.fetchedAt, status: s.status, providers: s.providers, notes: [s.discovered ? "discovered" : "", ...s.errors.slice(0, 2)].filter(Boolean).join("; ") }));
   const spec = buildSpec(store, products, { id: job.id, slug, engineVersion: deps.config.engineVersion, currencyOverride: job.input.options.currency?.toUpperCase() ?? null, sources, maxProducts: deps.config.maxProducts, evidence: evidenceFromSignals(ingest.sources) });
+  if (fast) spec.meta.warnings.push("Products came straight from the marketplace catalog, so titles and prices are exactly as the platform has them.");
   if (spec.catalog.products.length === 0) spec.meta.warnings.push("No products could be extracted. The store is live with an empty catalog; add products in the inventory editor.");
   for (const gap of ingest.coverage.gaps.slice(0, 4)) if (!spec.meta.warnings.includes(gap)) spec.meta.warnings.push(gap);
   await deps.jobs.putArtifact(job, "spec.draft", spec);
@@ -297,9 +359,19 @@ export async function stageBuildSpec(ctx: StageContext): Promise<StepOutcome> {
 export async function stageNormalize(ctx: StageContext): Promise<StepOutcome> {
   await stageNormalizeStore(ctx);
   const ingest = await artifact<IngestResult>(ctx, "ingest");
-  const batches = productBatches(ingest);
-  let count = 0;
-  for (let b = 0; b < batches.length && count < ctx.deps.config.maxProducts; b++) count += (await stageNormalizeProducts(ctx, b)).length;
+  if (!fastPathReason(ctx.job, ingest, ctx.deps.config)) {
+    const wanted = Math.min(productBatches(ingest).length, Math.ceil(ctx.deps.config.maxProducts / PRODUCT_BATCH));
+    // Batch 0 alone first: it writes the prompt cache, and measured runs show it costs ~2x what
+    // the rest do. Every later batch then reads a warm cache, and they have no reason to wait
+    // on each other, so they go out together.
+    if (wanted > 0) await stageNormalizeProducts(ctx, 0);
+    if (wanted > 1) {
+      const rest = Array.from({ length: wanted - 1 }, (_, i) => i + 1);
+      const results = await mapLimit(rest, NORMALIZE_CONCURRENCY, (b) => stageNormalizeProducts(ctx, b));
+      const failed = results.find((r) => !r.ok);
+      if (failed && !failed.ok) throw new StepFailure("normalize", failed.error);
+    }
+  }
   return stageBuildSpec(ctx);
 }
 
@@ -312,6 +384,35 @@ export async function stageAssets(ctx: StageContext): Promise<StepOutcome> {
   await deps.jobs.putArtifact(job, "spec.assets", result.spec);
   await deps.jobs.putArtifact(job, "image-refs", result.representative);
   return `${result.downloaded} images downloaded, ${result.skipped} reused, ${result.failed} failed`;
+}
+
+/**
+ * Publish the store before enrichment runs, so the merchant gets a live URL to look at while
+ * Claude is still polishing copy and theme (measured at 32-47s). Compose+build+deploy on the
+ * local deployer costs under a second, so this is close to free.
+ *
+ * Not done for source-building deployers (Vercel) yet: there a publish means uploading every file
+ * and waiting on a remote build, so a second one is a real cost that has to be measured first.
+ */
+export async function stagePreview(ctx: StageContext): Promise<StepOutcome> {
+  const { job, deps } = ctx;
+  if (!deps.config.earlyPublish) return { skip: "disabled" };
+  if (job.input.options.skipBuild) return { skip: "nothing to publish" };
+  if (deps.deployer.deploySource) return { skip: `${deps.deployer.id} builds from source; publishing once at the end` };
+  const spec = await optionalArtifact<StoreSpec>(ctx, "spec.assets");
+  if (!spec) return { skip: "no spec yet" };
+  if (!spec.catalog.products.length) return { skip: "no products to show yet" };
+
+  // enrich reads spec.assets and writes spec, so seeding spec here is overwritten later, not lost.
+  await deps.jobs.putArtifact(job, "spec", spec);
+  await stageTemplate(ctx);
+  await stageCompose(ctx);
+  await stageBuild(ctx);
+  await stageDeploy(ctx);
+  if (!job.siteUrl) return { skip: "nothing deployed" };
+  job.preview = true;
+  await deps.jobs.save(job);
+  return `live at ${job.siteUrl} while the copy and theme are finished`;
 }
 
 export async function stageEnrich(ctx: StageContext): Promise<StepOutcome> {
@@ -437,6 +538,7 @@ export async function finishJob(ctx: StageContext): Promise<JobRecord> {
   const { job, deps } = ctx;
   job.status = "done";
   job.error = null;
+  job.preview = false; // the final publish has replaced whatever stagePreview put up
   await deps.jobs.save(job);
   ctx.publish({ type: "status", jobId: job.id, status: "done", at: new Date().toISOString() });
   ctx.publish({ type: "done", jobId: job.id, job, at: new Date().toISOString() });

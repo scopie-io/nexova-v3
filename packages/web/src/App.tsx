@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, classifyForHint, type Coverage, type Health, type Job, type JobEvent, type LinkHint, type StepState, type StoreMeta, type TemplateManifest } from "./api";
+import { api, classifyForHint, type Coverage, type Health, type Job, type JobEvent, type LinkHint, type ProductPreview, type StepState, type StoreMeta, type TemplateManifest } from "./api";
 
 const STEP_LABELS: Record<string, string> = {
   detect: "Reading your links",
@@ -74,8 +74,7 @@ function Nav({ offline }: { offline: boolean | null }) {
   return (
     <header className="nav">
       <a className="brand" href="/">
-        <span className="brand-mark">N</span>
-        nexova
+        <img className="brand-logo" src="/brand/logo-nexova-color.svg" alt="Nexova" />
       </a>
       <nav className="nav-links">
         <a href="#how">How it works</a>
@@ -176,6 +175,7 @@ function Hero({ onStart, templates, health }: { onStart: (input: string, options
 
   return (
     <section className="hero" id="top">
+      <div className="hero-art" aria-hidden="true" />
       <div className="pills">
         <span className="pill">⚡ Live in minutes</span>
         <span className="pill">🔗 Paste links or screenshots</span>
@@ -369,6 +369,7 @@ function BuildView({ job: initial, onNew, onRebuild, templates }: { job: Job; on
   const [showLogs, setShowLogs] = useState(false);
   const [templateId, setTemplateId] = useState<string>("");
   const [coverage, setCoverage] = useState<Coverage | null>(null);
+  const [found, setFound] = useState<{ products: ProductPreview[]; total: number } | null>(null);
   const logRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
@@ -376,6 +377,7 @@ function BuildView({ job: initial, onNew, onRebuild, templates }: { job: Job; on
     setProgress({});
     setLogs([]);
     setCoverage(null);
+    setFound(null);
     const stop = api.events(
       initial.id,
       (e: JobEvent) => {
@@ -385,6 +387,7 @@ function BuildView({ job: initial, onNew, onRebuild, templates }: { job: Job; on
         } else if (e.type === "status") setJob((j) => ({ ...j, status: e.status }));
         else if (e.type === "usage") setJob((j) => ({ ...j, usage: e.usage }));
         else if (e.type === "progress") setProgress((p) => ({ ...p, [e.step]: e.message }));
+        else if (e.type === "products") setFound({ products: e.products, total: e.total });
         else if (e.type === "log") setLogs((l) => [...l.slice(-400), `${e.record.ts.slice(11, 19)} ${e.record.level.padEnd(5)} ${e.record.msg}`]);
         else if (e.type === "done") {
           setJob(e.job);
@@ -422,18 +425,21 @@ function BuildView({ job: initial, onNew, onRebuild, templates }: { job: Job; on
   const activeStep = job.steps.find((s) => s.status === "running");
   const pct = useMemo(() => Math.round((job.steps.filter((s) => s.status === "done" || s.status === "skipped").length / job.steps.length) * 100), [job.steps]);
   const siteUrl = job.siteUrl ?? (done && job.slug ? `/s/${job.slug}/` : null);
+  const polishing = running && !!siteUrl;
+  const eta = useMemo(() => (running ? remainingMs(job.steps) : null), [job.steps, running]);
 
   return (
     <section className="build">
       <div className="build-head">
         <div>
-          <p className="eyebrow">{done ? "Your store is live" : failed ? "Something went wrong" : "Building your store"}</p>
+          <p className="eyebrow">{done ? "Your store is live" : failed ? "Something went wrong" : polishing ? "Your store is live — still polishing" : "Building your store"}</p>
           <h1>{done ? job.slug : activeStep ? STEP_LABELS[activeStep.name] : failed ? "Build stopped" : "Starting…"}</h1>
           {activeStep && progress[activeStep.name] && <p className="muted mono">{progress[activeStep.name]}</p>}
           {failed && job.error && <p className="error">{job.error}</p>}
         </div>
         <div className="build-meta">
           <span className="pill">{pct}%</span>
+          {running && <Elapsed since={job.createdAt} eta={eta} />}
           <span className="pill">${job.usage.costUsd.toFixed(3)} · {job.usage.calls} AI calls</span>
           {running && (
             <button className="btn btn-ghost" onClick={() => api.cancel(job.id)}>
@@ -510,7 +516,8 @@ function BuildView({ job: initial, onNew, onRebuild, templates }: { job: Job; on
               ) : (
                 <>
                   <div className="spinner" />
-                  <p className="muted">Your preview appears here as soon as the site is published.</p>
+                  <p className="muted">{found ? `Found ${found.total} product${found.total === 1 ? "" : "s"}. Your preview appears here as soon as the site is published.` : "Your preview appears here as soon as the site is published."}</p>
+                  {found && <ProductPeek found={found} />}
                 </>
               )}
             </div>
@@ -577,5 +584,64 @@ function Step({ step, progress }: { step: StepState; progress?: string }) {
         <span className="step-msg">{step.status === "running" ? progress || "working…" : step.message || (step.status === "pending" ? "" : step.status)}</span>
       </div>
     </li>
+  );
+}
+
+/**
+ * Wall-clock per step, from a measured fast-path build (a TikTok Shop link, 34 products).
+ * A job that takes the full ladder instead - screenshots, pasted lines, a blocked marketplace -
+ * spends far longer in research and normalize, so its estimate will run under.
+ * Regenerate from real builds with: node scripts/job-timings.mjs --median
+ */
+const STEP_MS: Record<string, number> = { detect: 600, ingest: 20_000, discover: 1_800, attachments: 2_000, research: 1_500, normalize: 28_300, assets: 9_400, preview: 7_800, enrich: 41_800, template: 1_500, compose: 3_000, build: 1_500, deploy: 1_800 };
+
+/** Rough time left: the medians of every step that has not finished yet. */
+function remainingMs(steps: StepState[]): number {
+  let left = 0;
+  for (const s of steps) {
+    if (s.status === "done" || s.status === "skipped" || s.status === "failed") continue;
+    const est = STEP_MS[s.name] ?? 0;
+    if (s.status === "running" && s.startedAt) left += Math.max(0, est - (Date.now() - new Date(s.startedAt).getTime()));
+    else left += est;
+  }
+  return left;
+}
+
+function humanDuration(ms: number): string {
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  return s % 60 >= 30 ? `${m}½ min` : `${m} min`;
+}
+
+/** A ticking clock beats an indefinite spinner: people wait far longer when they can see progress. */
+function Elapsed({ since, eta }: { since: string; eta: number | null }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const elapsed = Math.max(0, now - new Date(since).getTime());
+  return (
+    <span className="pill">
+      <span className="mono">{humanDuration(elapsed)}</span>
+      {eta != null && eta > 30_000 && <span className="muted"> · about {humanDuration(eta)} left</span>}
+    </span>
+  );
+}
+
+/** The merchant's own products, on screen while the rest of the build runs. */
+function ProductPeek({ found }: { found: { products: ProductPreview[]; total: number } }) {
+  return (
+    <div className="peek">
+      {found.products.map((p, i) => (
+        <div className="peek-card" key={`${p.title}-${i}`}>
+          {p.image ? <img src={p.image} alt="" loading="lazy" /> : <div className="peek-img" />}
+          <strong>{p.title}</strong>
+          {p.priceText && <span className="muted">{p.priceText}</span>}
+        </div>
+      ))}
+      {found.total > found.products.length && <div className="peek-card peek-more">+{found.total - found.products.length} more</div>}
+    </div>
   );
 }

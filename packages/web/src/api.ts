@@ -21,6 +21,8 @@ export interface Job {
   slug: string | null;
   templateId: string | null;
   siteUrl: string | null;
+  /** siteUrl is up but pre-enrichment; a polished republish is still coming. */
+  preview?: boolean;
   usage: Usage;
   error: string | null;
   createdAt: string;
@@ -56,12 +58,19 @@ export interface Coverage {
   recommendations: string[];
   score: number;
 }
+export interface ProductPreview {
+  title: string;
+  priceText: string;
+  image: string | null;
+}
+
 export type JobEvent =
   | { type: "status"; status: Job["status"] }
   | { type: "step"; step: StepState }
   | { type: "log"; record: { ts: string; level: string; ns: string; msg: string } }
   | { type: "usage"; usage: Usage }
   | { type: "progress"; step: string; message: string }
+  | { type: "products"; products: ProductPreview[]; total: number }
   | { type: "done"; job: Job }
   | { type: "error"; error: string };
 
@@ -109,7 +118,7 @@ export const api = {
         /* ignore */
       }
     };
-    for (const t of ["status", "step", "log", "usage", "progress", "done", "error"]) es.addEventListener(t, handler as EventListener);
+    for (const t of ["status", "step", "log", "usage", "progress", "products", "done", "error"]) es.addEventListener(t, handler as EventListener);
     es.onerror = () => {
       // Hosted functions cut long streams; the browser reconnects on its own with Last-Event-ID and the
       // server resumes from there. Only a permanent failure (readyState CLOSED) ends the subscription.

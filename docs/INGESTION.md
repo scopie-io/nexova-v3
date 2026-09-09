@@ -78,6 +78,10 @@ Prints per-source status, strategies that worked, merged products with provenanc
 | `NEXOVA_WAYBACK` | `1` | Archived snapshot fallback |
 | `NEXOVA_BROWSER` | `0` | Playwright provider |
 | `NEXOVA_MAX_VISION_IMAGES` | `20` | Screenshots per job sent to vision |
+| `NEXOVA_FAST_PATH` | `1` | Trust a marketplace API's catalog: skip research and per-product Claude normalization |
+| `NEXOVA_EARLY_PUBLISH` | `1` | Publish once before enrichment so the merchant sees a live store sooner (local deployer only) |
+| `NEXOVA_EFFORT_NORMALIZE` | – | Effort for the normalize calls, overriding `NEXOVA_EFFORT` |
+| `NEXOVA_EFFORT_ENRICH` | – | Effort for the enrichment call, overriding `NEXOVA_EFFORT` |
 
 ## What still needs the merchant (and where official APIs come in)
 

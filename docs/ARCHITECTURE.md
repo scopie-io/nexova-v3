@@ -16,11 +16,14 @@ ingest     Run providers per URL (cheapest first): direct-fetch (OG, JSON-LD, re
            playwright (optional). Results are merged into SourceSignals and cached (data/cache/sources).
 research   Claude with server-side web_search + web_fetch tools browses the merchant's links and the web,
            writes a factual brief (brand, products, prices, images, contact). Handles pause_turn.
+           Skipped on the fast path (see below).
 normalize  Claude structured outputs: signals + brief -> StoreDraft (brand/theme/commerce/categories/copy)
            and ProductBatchDraft per batch of 20 raw candidates. mapping.ts turns drafts into a StoreSpec
            (stable ids/slugs, currency, WhatsApp checkout, socials).
 assets     Download brand + product images into stores/<slug>/assets (social CDNs expire and block
            hotlinking). Spec image URLs become site-relative; failures keep the remote URL.
+preview    Publish what exists already (local deployer only) so the merchant gets a live URL while
+           enrichment runs. job.preview stays true until the final publish replaces it.
 enrich     Claude (with the downloaded images) finalizes copy, palette, fonts, section order, featured
            products, FAQ, SEO and picks a template from the registry.
 template   Resolve the template (requested > Claude's choice > rule scoring).
@@ -28,6 +31,22 @@ compose    Copy the template, link its node_modules, write src/nexova/store.json
 build      `npm run build` with NEXOVA_BASE_PATH=/s/<slug>/.
 deploy     LocalDeployer (stores/<slug>/live, served by the server) or NetlifyDeployer.
 ```
+
+### The fast path
+
+When a marketplace API returned the catalog itself (`tiktok-shop-api`, `shopify-products-json`,
+`shopee-api`), the pipeline skips `research` and every `normalize-products` call: those products are
+already structured at a higher precedence than anything Claude would infer from the same payload, so
+`claude/mapping.ts:productsFromSignals` maps `RawProduct -> ProductDraft` directly. Claude still
+writes the store draft (brand, theme, categories, copy) and the enrichment.
+
+`pipeline/stages.ts:fastPathReason` is deliberately conservative and stands down whenever the
+merchant gave us something the API did not know about: any screenshot, any pasted product line, or
+any readable source the API did not cover. `NEXOVA_FAST_PATH=0` or `options.fastPath: "off"` forces
+the full ladder, which is how to A/B the two.
+
+Measured on a 52-product TikTok Shop: research 231s and normalize 470s both fall away, leaving the
+~28s store draft.
 
 Each step reports status + a human message through the `JobBus` (SSE in the server, `subscribe()` in the SDK). Artifacts (`input.json`, `ingest.json`, `research.md`, `store.draft.json`, `products.draft.json`, `spec.json`, `enrichment.json`) live in `data/jobs/<id>/`.
 

@@ -19,7 +19,7 @@ import type { TemplateRegistry } from "../templates/registry.js";
 import { addLogSink, createLogger } from "../util/log.js";
 import type { JobBus } from "./events.js";
 import type { JobStore } from "./job-store.js";
-import { failJob, finishJob, runStep, setStatus, skipStep, stageAssets, stageAttachments, stageBuild, stageCompose, stageDeploy, stageDetect, stageDiscover, stageEnrich, stageIngest, stageNormalize, stageResearch, stageTemplate, type StageContext } from "./stages.js";
+import { failJob, finishJob, runStep, setStatus, skipStep, stageAssets, stageAttachments, stageBuild, stageCompose, stageDeploy, stageDetect, stageDiscover, stageEnrich, stageIngest, stageNormalize, stagePreview, stageResearch, stageTemplate, type StageContext } from "./stages.js";
 import { siteDirFor } from "../generate/compose.js";
 
 export interface PipelineDeps {
@@ -75,6 +75,7 @@ export async function runJob(jobId: string, deps: PipelineDeps, signal: AbortSig
     await runStep(ctx, "research", () => stageResearch(ctx));
     await runStep(ctx, "normalize", () => stageNormalize(ctx));
     await runStep(ctx, "assets", () => stageAssets(ctx));
+    await runStep(ctx, "preview", () => stagePreview(ctx));
     await runStep(ctx, "enrich", () => stageEnrich(ctx));
     await runStep(ctx, "template", () => stageTemplate(ctx));
     await runStep(ctx, "compose", () => stageCompose(ctx));
@@ -96,7 +97,7 @@ export async function runRebuild(jobId: string, slug: string, deps: PipelineDeps
   const { ctx, detach } = createStageContext(job, deps, signal);
   try {
     await setStatus(ctx, "running");
-    for (const name of ["detect", "ingest", "discover", "attachments", "research", "normalize", "assets", "enrich"] as const) await skipStep(ctx, name, "rebuild");
+    for (const name of ["detect", "ingest", "discover", "attachments", "research", "normalize", "assets", "preview", "enrich"] as const) await skipStep(ctx, name, "rebuild");
     await runStep(ctx, "template", () => stageTemplate(ctx, "store"));
     await runStep(ctx, "compose", () => stageCompose(ctx));
     await runStep(ctx, "build", () => stageBuild(ctx));

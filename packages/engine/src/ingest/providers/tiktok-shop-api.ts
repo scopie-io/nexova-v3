@@ -18,12 +18,16 @@
 import type { EngineConfig } from "../../config.js";
 import type { RawProduct, RawProfile, SourceSignals } from "../../schema/signals.js";
 import { fetchJson } from "../http.js";
+import { mapLimit } from "../../util/retry.js";
 import { mergeUnique, type Provider, type ProviderContext } from "./types.js";
 
 type AnyRec = Record<string, unknown>;
 
 export const TIKTOK_SHOP_API_HOST = "tiktok-shop-api-product-search-seller-data-reviews.p.rapidapi.com";
 export const TIKTOK_SHOP_REGIONS = ["US", "GB", "DE", "FR", "IT", "ID", "MY", "MX", "PH", "SG", "ES", "TH", "VN", "BR", "JP", "IE"];
+/** Detail fetches in flight at once. Small: each one is a paid API credit. */
+const DETAIL_CONCURRENCY = 4;
+
 const VIA = "tiktok-shop-api";
 const VIA_SHOWCASE = "tiktok-shop-api-showcase";
 
@@ -449,11 +453,14 @@ async function enrichTop(state: RunState, skip: Set<string>): Promise<void> {
   const budget = state.config.tiktokShopDetails;
   if (budget <= 0) return;
   const targets = state.signals.products.filter((p) => p.via === VIA && p.externalId && !skip.has(p.externalId)).slice(0, budget);
-  for (const p of targets) {
-    if (state.stopped) break;
+  // Each detail is an independent GET and applyDetail only touches its own product row, so these
+  // go out together. Serially they were ~6s each and dominated ingest. The credit cost is the
+  // same either way; `stopped` is still checked per task so a quota error stops the rest.
+  await mapLimit(targets, DETAIL_CONCURRENCY, async (p) => {
+    if (state.stopped) return;
     const d = await fetchDetail(state, { productId: p.externalId!, url: null });
     if (d) skip.add(p.externalId!);
-  }
+  });
 }
 
 /**

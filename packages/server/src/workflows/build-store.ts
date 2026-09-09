@@ -93,8 +93,8 @@ async function stepNormalizeStore(jobId: string): Promise<number> {
     ctx.publish({ type: "step", jobId, step: { ...st }, at: st.startedAt });
     await stages.stageNormalizeStore(ctx);
     await engine.jobs.save(job); // the artifact map must reach the next invocation
-    const ingest = await engine.jobs.getArtifact<{ products: unknown[] }>(job, "ingest");
-    return stages.productBatches((ingest ?? { products: [] }) as never).length;
+    // 0 on the fast path: the catalog API's own products are mapped in buildSpec, no Claude batches.
+    return await stages.plannedBatchCount(ctx);
   } finally {
     await detach();
   }
@@ -222,7 +222,9 @@ export async function buildStoreWorkflow(jobId: string) {
     await stepAttachments(jobId);
     await stepResearch(jobId);
     const batches = await stepNormalizeStore(jobId);
-    for (let i = 0; i < batches; i++) await stepNormalizeProducts(jobId, i);
+    // Batch 0 first so it writes the prompt cache the rest read; then the rest together.
+    if (batches > 0) await stepNormalizeProducts(jobId, 0);
+    if (batches > 1) await Promise.all(Array.from({ length: batches - 1 }, (_, i) => stepNormalizeProducts(jobId, i + 1)));
     await stepBuildSpec(jobId);
     await stepAssets(jobId);
     await stepEnrich(jobId);

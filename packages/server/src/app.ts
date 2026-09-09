@@ -90,6 +90,7 @@ export function sanitizeOptions(o: JobOptions | undefined): JobOptions {
     skipBuild: !!o.skipBuild,
     skipResearch: !!o.skipResearch,
     skipDiscovery: !!o.skipDiscovery,
+    fastPath: o.fastPath === "off" ? "off" : "auto",
     slug: typeof o.slug === "string" && /^[a-z0-9-]{2,60}$/.test(o.slug) ? o.slug : null,
     currency: typeof o.currency === "string" && /^[A-Za-z]{3}$/.test(o.currency) ? o.currency.toUpperCase() : null,
     instructions: typeof o.instructions === "string" ? o.instructions.slice(0, 2000) : null,

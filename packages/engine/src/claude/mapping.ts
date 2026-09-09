@@ -324,6 +324,99 @@ export function evidenceFromSignals(sources: SourceSignals[]): SpecEvidence {
   return { testimonials: testimonials.slice(0, 6), usps: usps.slice(0, 4), marketplaceUrl };
 }
 
+/**
+ * RawProduct -> ProductDraft without asking Claude.
+ *
+ * A marketplace API hands us the catalog already structured — title, price, images, variants,
+ * stock, ratings — at a higher precedence (94) than anything the model would infer from the same
+ * payload. Sending it through normalizeProducts costs one Claude call per 12 products and
+ * transcribes fields that were never ambiguous, so the fast path maps them here instead.
+ *
+ * Categories still come from the store draft, which Claude does write: this only assigns each
+ * product to one of those categories by matching its own category/tag labels.
+ */
+export function productsFromSignals(raw: RawProduct[], store: StoreDraft, opts: { maxProducts: number; currency: string }): ProductDraft[] {
+  const categories = store.categories.map((c) => ({ slug: slugify(c.slug || c.name, "category"), tokens: tokenize(`${c.name} ${c.slug} ${c.description}`) }));
+  const out: ProductDraft[] = [];
+
+  for (const p of raw.slice(0, opts.maxProducts)) {
+    const title = (p.title ?? "").trim();
+    if (!title) continue;
+    const price = typeof p.price === "number" && p.price > 0 ? round2(p.price) : round2(parsePrice(p.priceText ?? "") ?? 0);
+    const images = dedupeImages((p.images ?? []).filter((u) => /^https?:\/\//i.test(u)).map((url) => ({ url, alt: title })));
+    const description = (p.description ?? "").trim();
+
+    out.push({
+      title,
+      description,
+      shortDescription: shorten(description || title, 160),
+      price: { amount: price, currency: (p.currency || opts.currency || "").toUpperCase() },
+      compareAtPrice: typeof p.compareAtPrice === "number" && p.compareAtPrice > price ? round2(p.compareAtPrice) : 0,
+      images,
+      options: (p.options ?? []).map((o) => ({ name: o.name, values: o.values })),
+      variants: (p.variants ?? []).map((v) => ({
+        title: v.title,
+        options: [],
+        price: typeof v.price === "number" && v.price > 0 ? round2(v.price) : 0,
+        sku: v.sku ?? "",
+        imageUrl: v.image ?? "",
+      })),
+      categorySlugs: matchCategory(p, categories),
+      tags: p.tags ?? [],
+      attributes: [],
+      inventoryStatus: stockStatus(p.stock),
+      rating: typeof p.rating === "number" && p.rating > 0 ? p.rating : 0,
+      ratingCount: p.ratingCount ?? 0,
+      soldCount: p.soldCount ?? 0,
+      sourceUrl: p.url ?? "",
+      sourcePlatform: (p.sourcePlatform ?? "unknown") as ProductDraft["sourcePlatform"],
+      externalId: p.externalId ?? "",
+      featured: false,
+      // The API is authoritative, so a complete record is trusted; an item missing both a price
+      // and a photo is more likely a banner or a placeholder than something for sale.
+      confidence: price > 0 && images.length ? 0.95 : price > 0 || images.length ? 0.6 : 0.25,
+    });
+  }
+  return out;
+}
+
+function tokenize(s: string): Set<string> {
+  return new Set(
+    s
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((t) => t.length > 2),
+  );
+}
+
+/** Assign a product to the store draft's categories by label overlap; empty means "uncategorised". */
+function matchCategory(p: RawProduct, categories: Array<{ slug: string; tokens: Set<string> }>): string[] {
+  if (!categories.length) return [];
+  const own = tokenize([p.category ?? "", ...(p.tags ?? []), p.title].join(" "));
+  if (!own.size) return [];
+  let best: { slug: string; score: number } | null = null;
+  for (const c of categories) {
+    let score = 0;
+    for (const t of c.tokens) if (own.has(t)) score += 1;
+    if (score > 0 && (!best || score > best.score)) best = { slug: c.slug, score };
+  }
+  return best ? [best.slug] : [];
+}
+
+function stockStatus(stock: number | null | undefined): ProductDraft["inventoryStatus"] {
+  if (typeof stock !== "number") return "unknown";
+  if (stock <= 0) return "out_of_stock";
+  return stock <= 5 ? "low_stock" : "in_stock";
+}
+
+function shorten(s: string, max: number): string {
+  const clean = s.replace(/\s+/g, " ").trim();
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max);
+  const stop = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
+  return stop > max * 0.5 ? cut.slice(0, stop + 1) : `${cut.replace(/[\s,;:-]+$/, "")}…`;
+}
+
 export function defaultSections(productCount: number, categoryCount: number, testimonialCount: number, faqCount: number): StoreSpec["pages"]["home"]["sections"] {
   const sections: StoreSpec["pages"]["home"]["sections"] = [];
   sections.push({ type: "usp", title: "", subtitle: "" });

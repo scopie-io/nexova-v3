@@ -81,7 +81,9 @@ describe("pipeline (offline gateway + fake vision)", () => {
     expect(done.templateId).toBe("nexova-starter");
     expect(done.siteUrl).toBe("http://localhost:4000/s/kopi-aman-test/");
     const statuses = Object.fromEntries(done.steps.map((s) => [s.name, s.status]));
-    expect(statuses).toMatchObject({ detect: "done", ingest: "skipped", discover: "skipped", attachments: "done", research: "skipped", normalize: "done", assets: "done", enrich: "done", template: "done", compose: "done", build: "done", deploy: "done" });
+    expect(statuses).toMatchObject({ detect: "done", ingest: "skipped", discover: "skipped", attachments: "done", research: "skipped", normalize: "done", assets: "done", preview: "done", enrich: "done", template: "done", compose: "done", build: "done", deploy: "done" });
+    // The store went live once before enrichment and was republished after it.
+    expect(done.preview).toBe(false);
 
     const coverage = await engine.jobs.getArtifact<{ totals: { products: number }; attachments: { total: number; products: number } }>(done, "coverage");
     expect(coverage?.attachments.total).toBe(2);
