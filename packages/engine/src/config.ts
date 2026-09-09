@@ -79,10 +79,13 @@ export interface EngineConfig {
 
   // ---- Shopee (RapidAPI) ----
   /**
-   * Off by default. Measured on real MY shops, the API's shop-URL mode returns 1-2 products
-   * however many are asked for (50 -> 1, 20 -> 2), while costing ~16 billed calls and ~205s per
-   * shop. Its keyword mode works, but returns other sellers' products, which is not what a
-   * merchant's store needs. Set NEXOVA_SHOPEE_SCRAPER=1 to opt in if that changes.
+   * Off by default. The API's shop-URL mode returns roughly half a dozen products per shop
+   * whatever is asked for: Kiehl's Official Store (kiehls.os, 109 products on the storefront)
+   * returned 6 when asked for 50, and the same 6 came back from the shop's all-products listing
+   * URL - so it is a cap on what that mode sees, not a wrong page. Two smaller shops returned 1
+   * and 2. Each attempt costs ~15 billed calls and ~200s. Keyword mode does return a full page,
+   * but of other sellers' products, which is not what a merchant's own store needs.
+   * Set NEXOVA_SHOPEE_SCRAPER=1 to opt in if the API's shop mode improves.
    */
   shopeeScraper: boolean;
   /**
