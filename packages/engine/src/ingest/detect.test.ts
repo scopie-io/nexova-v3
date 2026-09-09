@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyUrl, detectInput } from "./detect.js";
+import { appDeepLinkToWeb, classifyUrl, detectInput } from "./detect.js";
 
 describe("classifyUrl", () => {
   it("classifies TikTok profiles, videos and shop links", () => {
@@ -33,6 +33,15 @@ describe("classifyUrl", () => {
 
   it("strips tracking params and normalizes", () => {
     expect(classifyUrl("www.instagram.com/brand/?utm_source=x&igsh=abc")?.url).toBe("https://www.instagram.com/brand/");
+  });
+});
+
+describe("appDeepLinkToWeb", () => {
+  it("turns TikTok app deep links into shop and product web links", () => {
+    expect(appDeepLinkToWeb("snssdk1180://ec/store?sellerId=7494487462872581384&store_page_version=1&share_region=MY")).toBe("https://www.tiktok.com/shop/store/7494487462872581384?region=MY");
+    expect(classifyUrl("https://www.tiktok.com/shop/store/7494487462872581384?region=MY")).toMatchObject({ platform: "tiktok_shop", kind: "shop", externalId: "7494487462872581384", region: "my" });
+    expect(appDeepLinkToWeb("snssdk1180://ec/pdp?product_id=1737407560208582560")).toBe("https://www.tiktok.com/view/product/1737407560208582560");
+    expect(appDeepLinkToWeb("snssdk1180://profile?uid=1")).toBeNull();
   });
 });
 

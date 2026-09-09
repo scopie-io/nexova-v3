@@ -20,7 +20,7 @@ import { promises as fs } from "node:fs";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
-import { liveDirFor, parseStoreSpec, type Engine, type IncomingFile, type JobEvent, type JobOptions, type JobRecord } from "@nexova/engine";
+import { appDeepLinkToWeb, liveDirFor, parseStoreSpec, type Engine, type IncomingFile, type JobEvent, type JobOptions, type JobRecord } from "@nexova/engine";
 
 export interface JobLauncher {
   id: string;
@@ -148,6 +148,27 @@ export function createApp(opts: AppOptions): Hono {
     const templates = await engine.templates();
     const publisher = engine.deployer.check ? await engine.deployer.check().catch((err: unknown) => ({ ok: false, detail: err instanceof Error ? err.message : String(err) })) : { ok: true, detail: engine.deployer.id };
     return c.json({ ok: true, model: engine.config.model, effort: engine.config.effort, offline: engine.config.offline, gateway: engine.gateway.id, deployer: engine.deployer.id, publisher, storage: engine.storage.id, runner: launcher.id, templates: templates.map((t) => t.manifest.id), publicUrl: engine.config.publicUrl, tiktokShopApi: !!engine.config.rapidApiKey });
+  });
+
+  /** Support tool: what does this host see when it resolves a TikTok link? Limited to tiktok.com hosts (no open proxy). */
+  app.get("/api/diag/resolve", async (c) => {
+    const raw = c.req.query("url") ?? "";
+    let target: URL;
+    try {
+      target = new URL(raw);
+    } catch {
+      return c.json({ error: "url required" }, 400);
+    }
+    if (!/(^|\.)tiktok\.com$/i.test(target.hostname)) return c.json({ error: "only tiktok.com links" }, 400);
+    const startedAt = Date.now();
+    try {
+      const res = await fetch(target.toString(), { method: "GET", redirect: "manual", signal: AbortSignal.timeout(10_000), headers: { "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1" } });
+      const location = res.headers.get("location");
+      return c.json({ status: res.status, location: location ? location.slice(0, 300) : null, web: location ? (location.startsWith("http") ? location.split("?")[0] : appDeepLinkToWeb(location)) : null, ms: Date.now() - startedAt });
+    } catch (err) {
+      const cause = (err as { cause?: { code?: string; message?: string } }).cause;
+      return c.json({ error: err instanceof Error ? err.message : String(err), cause: cause ? `${cause.code ?? ""} ${cause.message ?? ""}`.trim() : null, ms: Date.now() - startedAt }, 502);
+    }
   });
 
   app.get("/api/templates", async (c) => {

@@ -268,6 +268,22 @@ export async function expandShortLinks(input: IngestInput, opts: { timeoutMs?: n
   return { ...input, urls };
 }
 
+/** Translate a TikTok app deep link into the web URL Nexova classifies (shop by seller id, or product by id). */
+export function appDeepLinkToWeb(link: string): string | null {
+  const m = link.match(/^[a-z0-9]+:\/\/([^?#]*)\??([^#]*)/i);
+  if (!m) return null;
+  const path = m[1].toLowerCase();
+  const params = new URLSearchParams(m[2]);
+  const region = params.get("region") ?? params.get("share_region");
+  const suffix = region ? `?region=${region.toUpperCase()}` : "";
+  const sellerId = params.get("sellerId") ?? params.get("seller_id") ?? params.get("shop_id");
+  const productId = params.get("product_id") ?? params.get("productId");
+  if (/(^|\/)ec\/(pdp|product)/.test(path) && productId) return `https://www.tiktok.com/view/product/${productId}${suffix}`;
+  if (productId && !sellerId) return `https://www.tiktok.com/view/product/${productId}${suffix}`;
+  if (sellerId) return `https://www.tiktok.com/shop/store/${sellerId}${suffix}`;
+  return null;
+}
+
 async function resolveRedirect(url: string, opts: { timeoutMs?: number; signal?: AbortSignal }): Promise<string | null> {
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(new Error("timeout")), opts.timeoutMs ?? 10_000);
@@ -276,12 +292,16 @@ async function resolveRedirect(url: string, opts: { timeoutMs?: number; signal?:
   try {
     const res = await fetch(url, { method: "GET", redirect: "manual", signal: ac.signal, headers: { "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1" } });
     const loc = res.headers.get("location");
-    if (loc && /^https?:\/\//i.test(loc)) {
+    if (!loc) return null;
+    if (/^https?:\/\//i.test(loc)) {
       // Drop the tracking payload the app attaches; keep only what identifies the page.
       const u = new URL(loc);
       for (const key of [...u.searchParams.keys()]) if (key !== "region") u.searchParams.delete(key);
       return u.toString();
     }
+    // Shop share links redirect straight into the app: snssdk1180://ec/store?sellerId=… or ec/pdp?product_id=…
+    const app = appDeepLinkToWeb(loc);
+    if (app) return app;
     return null;
   } catch {
     return null;
