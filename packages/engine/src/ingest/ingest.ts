@@ -88,7 +88,9 @@ export async function ingestUrls(urls: DetectedUrl[], opts: IngestOptions, meta:
     }
     dedupeWithinSource(signals);
     if (signals.status === "skipped") signals.status = signals.errors.length ? "failed" : "partial";
-    if (signals.status === "blocked" && (signals.products.length || signals.profile)) signals.status = "partial";
+    // A later provider's failure must not hide what an earlier one found (e.g. the TikTok Shop API
+    // read the catalog, then the page scrape was blocked): anything with products or a profile is readable.
+    if ((signals.status === "blocked" || signals.status === "failed") && (signals.products.length || signals.profile)) signals.status = signals.products.length >= 3 ? "ok" : "partial";
     signals.fetchedAt = new Date().toISOString();
     await cache.set(det.url, signals);
     opts.onSource?.(signals);
