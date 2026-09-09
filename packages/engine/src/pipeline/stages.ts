@@ -421,16 +421,19 @@ export async function stagePreview(ctx: StageContext): Promise<StepOutcome> {
 
 /**
  * Shopee's catalog API is asynchronous and slow. Measured against a real MY shop: ~47s before the
- * submit even returns a job id, ~162s to completion, and every call in between is billed. The
+ * submit even returns a job id, ~195s to completion, and every call in between is billed. The
  * ingest ladder caps a provider at max(fetchTimeoutMs * 4, 60s), so inline it could only ever time
  * out - paying full price for nothing and adding a minute to every job.
  *
- * So it runs here instead, after the store is already live, and rebuilds the store if it finds
- * anything. The merchant sees their site from the fast sources first; Shopee products land in a
- * second wave. If the scrape finds nothing, the finished store is untouched.
+ * So it runs after the store is already live. The merchant sees their site from the fast sources
+ * first; Shopee products land in a second wave. If the scrape finds nothing, the finished store is
+ * untouched.
+ *
+ * Writes `shopee-added` so a durable runner can decide whether to spend further steps rebuilding.
  */
-export async function stageShopeeCatalog(ctx: StageContext): Promise<StepOutcome> {
+export async function stageShopeeScrape(ctx: StageContext): Promise<StepOutcome> {
   const { job, deps } = ctx;
+  await deps.jobs.putArtifact(job, "shopee-added", 0);
   if (!deps.config.rapidApiKey) return { skip: "no RAPIDAPI_KEY" };
   if (job.input.options.skipBuild) return { skip: "nothing to rebuild" };
   const sources = (await optionalArtifact<SourceSignals[]>(ctx, "sources")) ?? [];
@@ -453,7 +456,7 @@ export async function stageShopeeCatalog(ctx: StageContext): Promise<StepOutcome
   await deps.jobs.putArtifact(job, "sources", sources);
   if (!added) return { skip: `${targets.length} Shopee source(s) scraped, no products` };
 
-  // Products changed, so the catalog has to be rebuilt from `sources` and the store republished.
+  // Products changed, so the catalog is reassembled here; rebuilding the store is the caller's move.
   const input = await artifact<IngestInput>(ctx, "input");
   const discovered = (await optionalArtifact<DetectedUrl[]>(ctx, "discovered")) ?? [];
   const extracts = (await optionalArtifact<AttachmentExtract[]>(ctx, "attachment-extracts")) ?? [];
@@ -462,18 +465,27 @@ export async function stageShopeeCatalog(ctx: StageContext): Promise<StepOutcome
   const ingest = assemble(sources, input.texts, extracts, discovered, currencyHint);
   await deps.jobs.putArtifact(job, "ingest", ingest);
   await deps.jobs.putArtifact(job, "coverage", ingest.coverage);
+  await deps.jobs.putArtifact(job, "shopee-added", added);
   publishProducts(ctx, ingest);
+  return `+${added} Shopee products; rebuilding`;
+}
 
-  // Same tail the first pass ran; stagePreview's precedent is to call stages directly rather than
-  // re-enter runStep, so the step list stays one line per pass.
+/**
+ * Scrape and rebuild in one call, for the in-process runner where the whole job is one long-lived
+ * task. The durable runner splits these instead, so no single function invocation has to hold both.
+ */
+export async function stageShopeeCatalog(ctx: StageContext): Promise<StepOutcome> {
+  const outcome = await stageShopeeScrape(ctx);
+  const added = (await optionalArtifact<number>(ctx, "shopee-added")) ?? 0;
+  if (!added) return outcome;
   await stageNormalize(ctx);
   await stageAssets(ctx);
   await stageEnrich(ctx);
   await stageTemplate(ctx);
-  await stageCompose(ctx);
-  await stageBuild(ctx);
-  await stageDeploy(ctx);
-  return `+${added} Shopee products, store rebuilt${job.siteUrl ? ` at ${job.siteUrl}` : ""}`;
+  // stagePublish, not compose/build/deploy: on a deploy-from-source host (Vercel) there is no
+  // shared disk between steps, so it composes in memory instead.
+  await stagePublish(ctx);
+  return `+${added} Shopee products, store rebuilt${ctx.job.siteUrl ? ` at ${ctx.job.siteUrl}` : ""}`;
 }
 
 export async function stageEnrich(ctx: StageContext): Promise<StepOutcome> {
