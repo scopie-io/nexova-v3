@@ -77,6 +77,13 @@ export interface EngineConfig {
   /** Products per shop enriched with full details (photos, description, variants, stock); one credit each. */
   tiktokShopDetails: number;
 
+  // ---- Shopee (Apify) ----
+  /**
+   * Token for the `xtracto/shopee-scraper` Apify actor, the only strategy that returns a Shopee
+   * catalogue when Shopee's own endpoints are blocked. Absent, the provider does not run.
+   */
+  apifyToken: string | null;
+
   // ---- storage ----
   /** Where state lives: "fs" (data/ and stores/ on disk) or "vercel" (Neon Postgres + Vercel Blob). */
   storage: StorageMode;
@@ -149,6 +156,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, rootDir = proce
     tiktokShopRegions: (env.NEXOVA_TIKTOK_SHOP_REGIONS || "MY,SG,US").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean),
     tiktokShopMaxPages: clampInt(env.NEXOVA_TIKTOK_SHOP_MAX_PAGES, 3, 1, 25),
     tiktokShopDetails: clampInt(env.NEXOVA_TIKTOK_SHOP_DETAILS, 6, 0, 60),
+    apifyToken: realSecret(env.APIFY_TOKEN),
     storage: (() => {
       const raw = (env.NEXOVA_STORAGE || "auto").toLowerCase();
       const cloud = !!env.DATABASE_URL?.trim() && !!env.BLOB_READ_WRITE_TOKEN?.trim();
