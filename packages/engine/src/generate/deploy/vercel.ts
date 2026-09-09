@@ -56,8 +56,25 @@ export class VercelDeployer implements Deployer {
     return `${API}${route}${route.includes("?") ? "&" : "?"}teamId=${encodeURIComponent(team)}`;
   }
 
+  /** fetch with the failure cause surfaced and a few retries on network errors (never on HTTP errors). */
+  private async request(label: string, url: string, init: RequestInit, attempts = 4): Promise<Response> {
+    let lastErr: unknown;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        return await fetch(url, init);
+      } catch (err) {
+        lastErr = err;
+        const cause = (err as { cause?: { code?: string; message?: string } }).cause;
+        const detail = `${err instanceof Error ? err.message : String(err)}${cause ? ` (${cause.code ?? ""} ${cause.message ?? ""})`.replace(/\s+\)/, ")") : ""}`;
+        if (attempt === attempts) throw new Error(`Vercel ${label}: ${detail}`);
+        await sleep(500 * 2 ** (attempt - 1));
+      }
+    }
+    throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+  }
+
   private async api<T>(method: string, route: string, body?: unknown): Promise<T> {
-    const res = await fetch(this.withTeam(route), {
+    const res = await this.request(`${method} ${route}`, this.withTeam(route), {
       method,
       headers: { authorization: `Bearer ${this.token}`, "content-type": "application/json" },
       body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -97,9 +114,9 @@ export class VercelDeployer implements Deployer {
   }
 
   private async uploadFile(sha: string, data: Buffer): Promise<void> {
-    const res = await fetch(this.withTeam(`/v2/files`), {
+    const res = await this.request(`upload ${sha.slice(0, 8)} (${data.byteLength} bytes)`, this.withTeam(`/v2/files`), {
       method: "POST",
-      headers: { authorization: `Bearer ${this.token}`, "content-type": "application/octet-stream", "x-vercel-digest": sha, "content-length": String(data.byteLength) },
+      headers: { authorization: `Bearer ${this.token}`, "content-type": "application/octet-stream", "x-vercel-digest": sha },
       body: new Uint8Array(data),
     });
     if (!res.ok && res.status !== 409) throw new Error(`Vercel file upload failed: HTTP ${res.status} ${(await res.text()).slice(0, 300)}`);

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../../config.js";
 import { emptySignals } from "../../schema/signals.js";
 import { classifyUrl } from "../detect.js";
-import { flattenRichDescription, interpretEnvelope, makeTikTokShopApiProvider, mapListProduct, mapProductDetail, regionCandidates } from "./tiktok-shop-api.js";
+import { flattenRichDescription, interpretEnvelope, makeTikTokShopApiProvider, mapListProduct, mapProductDetail, matchShopByHandle, regionCandidates, searchQueriesForHandle } from "./tiktok-shop-api.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string) => JSON.parse(readFileSync(path.join(here, "__fixtures__", name), "utf8")) as Record<string, unknown>;
@@ -58,6 +58,20 @@ describe("TikTok Shop API mappers", () => {
     expect(page).toMatchObject({ ok: true, hasMore: true, cursor: "WzM2OTM5LCIxNzMxMTczNzAzNDc1OTU4Mjc5Il0=" });
   });
 
+  it("finds the merchant's shop in search results by handle", () => {
+    const rows = [
+      { shop_id: "1", shop_name: "PlayPlanet", product_id: "a", title: "Kalimba" },
+      { shop_id: "2", shop_name: "Kalima.my", product_id: "b", title: "Top" },
+      { shop_id: "2", shop_name: "Kalima.my", product_id: "c", title: "Abaya" },
+    ];
+    expect(matchShopByHandle(rows, "kalima.my")).toEqual({ shopId: "2", shopName: "Kalima.my" });
+    expect(matchShopByHandle(rows, "@kalima_official")).toEqual({ shopId: "2", shopName: "Kalima.my" });
+    expect(matchShopByHandle(rows, "playplanet")).toEqual({ shopId: "1", shopName: "PlayPlanet" });
+    expect(matchShopByHandle(rows, "someoneelse")).toBeNull();
+    expect(searchQueriesForHandle("kalima.my")).toEqual(["kalima.my", "kalima"]);
+    expect(searchQueriesForHandle("goli")).toEqual(["goli"]);
+  });
+
   it("orders region candidates and drops unknown ones", () => {
     expect(regionCandidates("us", ["MY", "SG", "US"])).toEqual(["US", "MY", "SG"]);
     expect(regionCandidates(null, ["my", "xx"])).toEqual(["MY"]);
@@ -93,6 +107,11 @@ describe("TikTok Shop API provider", () => {
       }
       if (u.pathname === "/shop/product") return { ok: true, status: 200, data: detailFixture, error: null, blocked: false };
       if (u.pathname === "/shop/showcase") return { ok: true, status: 200, data: { success: true, data: [{ product_id: "555", title: "Creator pick", price: 9.5, currency: "USD", image_url: "https://cdn/c.webp" }], pagination: { has_more: false, cursor: null } }, error: null, blocked: false };
+      if (u.pathname === "/shop/search") {
+        const q = u.searchParams.get("query") ?? "";
+        const rows = /goli/i.test(q) ? [{ product_id: "s1", title: "Search hit", price: 1, currency: "USD", shop_id: "7495794203056835079", shop_name: "Goli Nutrition" }] : [];
+        return { ok: true, status: 200, data: { success: true, data: rows, pagination: { has_more: false, cursor: null } }, error: null, blocked: false };
+      }
       return { ok: false, status: 404, data: null, error: "Endpoint does not exist", blocked: false };
     });
   });
@@ -138,13 +157,19 @@ describe("TikTok Shop API provider", () => {
     expect(regionsTried.every((r) => r === "US")).toBe(true); // URL region tried first, no wasted credits
   });
 
-  it("reads a creator showcase and flags the products", async () => {
-    const det = classifyUrl("https://www.tiktok.com/@goli")!;
+  it("reads a creator showcase, then finds the shop by handle when the showcase is thin", async () => {
+    const det = classifyUrl("https://www.tiktok.com/@goli.nutrition")!;
     const signals = emptySignals(det, det.url, "src_test");
     await provider.run(det, signals, ctx);
-    expect(signals.products).toHaveLength(1);
-    expect(signals.products[0]).toMatchObject({ via: "tiktok-shop-api-showcase", externalId: "555" });
-    expect(signals.products[0].notes?.[0]).toMatch(/showcase/);
+    const showcase = signals.products.filter((p) => p.via === "tiktok-shop-api-showcase");
+    expect(showcase).toHaveLength(1);
+    expect(showcase[0].notes?.[0]).toMatch(/showcase/);
+    // search "goli.nutrition" matched shop "Goli Nutrition" -> catalog pulled by shop id
+    expect(signals.products.filter((p) => p.via === "tiktok-shop-api").length).toBeGreaterThanOrEqual(5);
+    expect(signals.profile?.name).toBe("Goli Nutrition");
+    const paths = fetchJsonMock.mock.calls.map((c) => new URL(c[0] as string).pathname);
+    expect(paths).toContain("/shop/search");
+    expect(paths).toContain("/shop/products");
   });
 
   it("stops on a quota error without throwing", async () => {

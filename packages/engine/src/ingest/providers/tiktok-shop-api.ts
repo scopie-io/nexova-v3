@@ -225,6 +225,45 @@ export function mapProductDetail(data: AnyRec, opts: { region: string | null; ev
   return { product, profile, shopId, region, descriptionImages: descImages, reviews, stats };
 }
 
+/** Normalize a handle or shop name for matching: lowercase, letters and digits only. */
+function normalizeName(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+const HANDLE_SUFFIXES = /(\.|_|-)?(my|sg|id|ph|th|vn|official|hq|store|shop|olshop|global)$/i;
+
+/** Search queries worth one credit each for a handle: the handle itself, then the handle without a market/official suffix. */
+export function searchQueriesForHandle(handle: string): string[] {
+  const base = handle.replace(/^@/, "").trim();
+  const stripped = base.replace(HANDLE_SUFFIXES, "").replace(/[._-]+$/, "");
+  const out = [base];
+  if (stripped && stripped.length >= 3 && normalizeName(stripped) !== normalizeName(base)) out.push(stripped);
+  return out;
+}
+
+/** Pick the shop in search results whose name is the merchant's handle (exactly, or minus a suffix on either side). */
+export function matchShopByHandle(rows: AnyRec[], handle: string): { shopId: string; shopName: string } | null {
+  const target = normalizeName(handle.replace(/^@/, ""));
+  const targetStripped = normalizeName(handle.replace(/^@/, "").replace(HANDLE_SUFFIXES, ""));
+  const shops = new Map<string, { shopId: string; shopName: string; hits: number }>();
+  for (const row of rows) {
+    const id = str(row.shop_id);
+    const name = str(row.shop_name);
+    if (!id || !name) continue;
+    const entry = shops.get(id) ?? { shopId: id, shopName: name, hits: 0 };
+    entry.hits += 1;
+    shops.set(id, entry);
+  }
+  const ranked = [...shops.values()].sort((a, b) => b.hits - a.hits);
+  const exact = ranked.find((s) => normalizeName(s.shopName) === target);
+  if (exact) return { shopId: exact.shopId, shopName: exact.shopName };
+  if (targetStripped.length >= 3) {
+    const loose = ranked.find((s) => normalizeName(s.shopName.replace(HANDLE_SUFFIXES, "")) === targetStripped);
+    if (loose) return { shopId: loose.shopId, shopName: loose.shopName };
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------------------------
 // HTTP client
 // ---------------------------------------------------------------------------------------------
@@ -417,6 +456,32 @@ async function enrichTop(state: RunState, skip: Set<string>): Promise<void> {
   }
 }
 
+/**
+ * The API does not index every product id, and a pasted profile carries no shop id at all. Searching
+ * the handle finds the shop by name; its id then gives the full catalog.
+ */
+async function searchShopByHandle(state: RunState, handle: string): Promise<boolean> {
+  for (const query of searchQueriesForHandle(handle)) {
+    if (state.stopped) return false;
+    const res = await withRegion<AnyRec[]>(state, `search "${query}"`, (region) => state.api.get<AnyRec[]>("/shop/search", { region, query, page: "1" }));
+    if (!res) continue;
+    const match = matchShopByHandle(res.data ?? [], handle);
+    if (!match) {
+      state.signals.errors.push(`${VIA}(search "${query}"): ${res.data?.length ?? 0} results, none from a shop named like @${handle}`);
+      continue;
+    }
+    // A wrong match would put another merchant's catalog on this store; drop the error trail for the found shop.
+    state.signals.errors = state.signals.errors.filter((e) => !e.startsWith(`${VIA}(search`));
+    ensureProfile(state.signals).name = state.signals.profile!.name ?? match.shopName;
+    const added = await fetchCatalog(state, { shopId: match.shopId, url: null });
+    if (added > 0) {
+      await enrichTop(state, new Set());
+      return true;
+    }
+  }
+  return false;
+}
+
 export function makeTikTokShopApiProvider(overrides: { host?: string } = {}): Provider {
   return {
     id: VIA,
@@ -443,6 +508,8 @@ export function makeTikTokShopApiProvider(overrides: { host?: string } = {}): Pr
             if (p.images?.[0]) mergeUnique(signals.images, [p.images[0]]);
           }
           if (rows.length) signals.embedded.tiktokShowcase = { count: rows.length, region: state.region };
+          // The showcase is thin or empty for most sellers; their shop is found by name instead.
+          if (signals.products.length < 3 && !state.stopped) await searchShopByHandle(state, src.handle!);
         } else if (src.kind === "product") {
           const productId = src.externalId && /^\d+$/.test(src.externalId) ? src.externalId : null;
           const detail = await fetchDetail(state, { productId, url: productId ? null : src.url });
@@ -453,8 +520,9 @@ export function makeTikTokShopApiProvider(overrides: { host?: string } = {}): Pr
           }
         } else {
           const shopId = src.externalId && /^\d+$/.test(src.externalId) ? src.externalId : null;
-          await fetchCatalog(state, { shopId, url: shopId ? null : src.url });
-          await enrichTop(state, new Set());
+          const added = await fetchCatalog(state, { shopId, url: shopId ? null : src.url });
+          if (added > 0) await enrichTop(state, new Set());
+          else if (src.handle && !state.stopped) await searchShopByHandle(state, src.handle);
         }
       } finally {
         signals.embedded.tiktokShopApiCalls = ((signals.embedded.tiktokShopApiCalls as number | undefined) ?? 0) + api.calls;
