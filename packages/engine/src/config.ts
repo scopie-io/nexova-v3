@@ -79,6 +79,13 @@ export interface EngineConfig {
 
   // ---- Shopee (RapidAPI) ----
   /**
+   * Off by default. Measured on real MY shops, the API's shop-URL mode returns 1-2 products
+   * however many are asked for (50 -> 1, 20 -> 2), while costing ~16 billed calls and ~205s per
+   * shop. Its keyword mode works, but returns other sellers' products, which is not what a
+   * merchant's store needs. Set NEXOVA_SHOPEE_SCRAPER=1 to opt in if that changes.
+   */
+  shopeeScraper: boolean;
+  /**
    * Wall-clock budget for one Shopee scrape job, submit plus polling. Measured on a real MY shop:
    * ~47s before the submit returns a job id, ~162s to completion. This runs in its own pipeline
    * stage after the store is live, not in the ingest ladder, so it is free to wait minutes.
@@ -157,6 +164,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, rootDir = proce
     tiktokShopRegions: (env.NEXOVA_TIKTOK_SHOP_REGIONS || "MY,SG,US").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean),
     tiktokShopMaxPages: clampInt(env.NEXOVA_TIKTOK_SHOP_MAX_PAGES, 3, 1, 25),
     tiktokShopDetails: clampInt(env.NEXOVA_TIKTOK_SHOP_DETAILS, 6, 0, 60),
+    shopeeScraper: env.NEXOVA_SHOPEE_SCRAPER === "1",
     shopeeScraperTimeoutMs: clampInt(env.NEXOVA_SHOPEE_TIMEOUT_MS, 240_000, 5_000, 900_000),
     storage: (() => {
       const raw = (env.NEXOVA_STORAGE || "auto").toLowerCase();

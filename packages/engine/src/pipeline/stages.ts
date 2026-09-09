@@ -434,6 +434,7 @@ export async function stagePreview(ctx: StageContext): Promise<StepOutcome> {
 export async function stageShopeeScrape(ctx: StageContext): Promise<StepOutcome> {
   const { job, deps } = ctx;
   await deps.jobs.putArtifact(job, "shopee-added", 0);
+  if (!deps.config.shopeeScraper) return { skip: "disabled (NEXOVA_SHOPEE_SCRAPER=1 to enable)" };
   if (!deps.config.rapidApiKey) return { skip: "no RAPIDAPI_KEY" };
   if (job.input.options.skipBuild) return { skip: "nothing to rebuild" };
   const sources = (await optionalArtifact<SourceSignals[]>(ctx, "sources")) ?? [];

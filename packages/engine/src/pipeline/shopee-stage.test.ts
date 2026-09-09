@@ -34,7 +34,7 @@ function ctxFor(sources: SourceSignals[], overrides: Record<string, unknown> = {
       publish: vi.fn(),
       signal: undefined,
       deps: {
-        config: { ...loadConfig({ NEXOVA_OFFLINE: "1", RAPIDAPI_KEY: "test-key-1234567890abcdef" }), ...overrides },
+        config: { ...loadConfig({ NEXOVA_OFFLINE: "1", RAPIDAPI_KEY: "test-key-1234567890abcdef", NEXOVA_SHOPEE_SCRAPER: "1" }), ...overrides },
         jobs: {
           captureDir: () => "/tmp/cap",
           getArtifact: async (_j: unknown, name: string) => artifacts.get(name) ?? null,
@@ -48,6 +48,16 @@ function ctxFor(sources: SourceSignals[], overrides: Record<string, unknown> = {
 }
 
 describe("stageShopeeCatalog", () => {
+  // Measured yield is 1-2 products per shop however many are asked for, at ~16 billed calls and
+  // ~205s each, so the scrape is opt-in until that changes.
+  it("is off unless NEXOVA_SHOPEE_SCRAPER=1", async () => {
+    supportsMock.mockReturnValue(true);
+    runMock.mockReset();
+    const { ctx } = ctxFor([sourceFor("https://shopee.com.my/kopikampung")], { shopeeScraper: false });
+    expect(await stageShopeeCatalog(ctx as never)).toEqual({ skip: "disabled (NEXOVA_SHOPEE_SCRAPER=1 to enable)" });
+    expect(runMock).not.toHaveBeenCalled();
+  });
+
   it("spends nothing without a key", async () => {
     supportsMock.mockReturnValue(true);
     runMock.mockReset();
