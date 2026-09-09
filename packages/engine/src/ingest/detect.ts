@@ -64,6 +64,18 @@ export function regionFromHost(host: string): string | null {
   return null;
 }
 
+/**
+ * Shopee's own shorteners, as pasted from the app's share sheet: shp.ee / shope.ee, usually with
+ * a market prefix (my.shp.ee, sg.shope.ee). They carry the market but no shop or product id.
+ */
+export const SHOPEE_SHORT_HOST = /^([a-z]{2}\.)?(shp|shope)\.ee$/i;
+
+/** The market prefix on a Shopee short host: my.shp.ee -> "my". Bare shp.ee says nothing. */
+export function regionFromShortHost(host: string): string | null {
+  const m = host.match(/^([a-z]{2})\.(shp|shope)\.ee$/i);
+  return m ? m[1].toLowerCase() : null;
+}
+
 function seg(pathname: string): string[] {
   return pathname.split("/").filter(Boolean).map((s) => decodeURIComponent(s));
 }
@@ -173,8 +185,9 @@ function classifyRaw(input: string): DetectedUrl | null {
   }
 
   // ---- Shopee ----
-  if (/(^|\.)shopee\.[a-z.]+$/.test(bare) || bare === "shp.ee") {
-    if (bare === "shp.ee") return { ...base, platform: "shopee", kind: "shop", externalId: parts[0] ?? null };
+  if (/(^|\.)shopee\.[a-z.]+$/.test(bare) || SHOPEE_SHORT_HOST.test(bare)) {
+    // A short link expandShortLinks could not resolve: the platform and market are known, the shop is not.
+    if (SHOPEE_SHORT_HOST.test(bare)) return { ...base, platform: "shopee", kind: "shop", region: regionFromShortHost(bare), externalId: parts[0] ?? null };
     const last = parts[parts.length - 1] ?? "";
     const iMatch = last.match(/-i\.(\d+)\.(\d+)$/);
     if (iMatch) return { ...base, platform: "shopee", kind: "product", externalId: `${iMatch[1]}.${iMatch[2]}` };
@@ -244,12 +257,13 @@ export function detectInput(raw: string): IngestInput {
   return { raw, urls, texts, attachments: [] };
 }
 
-const SHORT_HOSTS = /^(vt|vm)\.tiktok\.com$/i;
+const SHORT_HOSTS = /^((vt|vm)\.tiktok\.com|([a-z]{2}\.)?(shp|shope)\.ee)$/i;
 
 /**
- * Links copied from the TikTok app are short links (vt.tiktok.com/...) that redirect to a video,
- * a profile or a TikTok Shop product page. Follow the redirect once and re-classify, so a shop
- * product shared from the app is read as a shop product rather than a video.
+ * Links copied from an app's share sheet are short links that redirect to the real page:
+ * vt.tiktok.com/... to a video, a profile or a TikTok Shop product, my.shp.ee/... to a Shopee
+ * shop or product. Follow the redirect once and re-classify, so a shop product shared from the
+ * app is read as a shop product rather than a video - or, for Shopee, so it is read at all.
  */
 export async function expandShortLinks(input: IngestInput, opts: { timeoutMs?: number; signal?: AbortSignal } = {}): Promise<IngestInput> {
   const urls: DetectedUrl[] = [];

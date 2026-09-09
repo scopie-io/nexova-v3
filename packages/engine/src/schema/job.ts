@@ -15,6 +15,9 @@ export const STEP_NAMES = [
   "compose",
   "build",
   "deploy",
+  // Runs after deploy: Shopee's catalog API takes minutes, so its products arrive in a second
+  // wave and republish the store rather than holding the first publish up.
+  "shopee",
 ] as const;
 export type StepName = (typeof STEP_NAMES)[number];
 
