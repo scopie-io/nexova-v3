@@ -168,7 +168,6 @@ export type { IncomingFile } from "./ingest/attachments.js";
 export { huntProducts, huntProductsInHtml, extractJsonBlobs } from "./ingest/parsers/hunter.js";
 export { productsFromMarkdown } from "./ingest/providers/reader.js";
 export { tiktokShopApiProvider, makeTikTokShopApiProvider, mapListProduct, mapProductDetail, TIKTOK_SHOP_REGIONS } from "./ingest/providers/tiktok-shop-api.js";
-export { shopeeScraperProvider, makeShopeeScraperProvider, mapShopeeRow, interpretJob, SHOPEE_SCRAPER_COUNTRIES } from "./ingest/providers/shopee-scraper-api.js";
 export { fetchPage, fetchPageLadder, fetchJson } from "./ingest/http.js";
 export type { ClaudeGateway, GatewayContext } from "./claude/gateway.js";
 export { NexovaError } from "./claude/gateway.js";

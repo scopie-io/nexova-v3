@@ -179,21 +179,6 @@ async function stepPublish(jobId: string) {
 }
 stepPublish.maxRetries = 0;
 
-/**
- * The Shopee scrape gets its own invocation: it can run for minutes on its own, and the rebuild
- * after it is another normalize + enrich + publish. Returns how many products it added so the
- * workflow only pays for a rebuild when there is something to rebuild.
- */
-async function stepShopee(jobId: string): Promise<number> {
-  "use step";
-  await runStage(jobId, "shopee", stages.stageShopeeScrape);
-  const engine = await getEngine();
-  const job = await engine.jobs.get(jobId);
-  if (!job) throw new Error(`job ${jobId} not found`);
-  return (await engine.jobs.getArtifact<number>(job, "shopee-added")) ?? 0;
-}
-stepShopee.maxRetries = 0;
-
 async function stepSkip(jobId: string, names: StepName[], reason: string) {
   "use step";
   const engine = await getEngine();
@@ -245,17 +230,6 @@ export async function buildStoreWorkflow(jobId: string) {
     await stepEnrich(jobId);
     await stepTemplate(jobId, "spec");
     await stepPublish(jobId);
-    // Shopee catalogs arrive minutes later, after the store is already live; rebuild only if they do.
-    if ((await stepShopee(jobId)) > 0) {
-      const after = await stepNormalizeStore(jobId);
-      if (after > 0) await stepNormalizeProducts(jobId, 0);
-      if (after > 1) await Promise.all(Array.from({ length: after - 1 }, (_, i) => stepNormalizeProducts(jobId, i + 1)));
-      await stepBuildSpec(jobId);
-      await stepAssets(jobId);
-      await stepEnrich(jobId);
-      await stepTemplate(jobId, "spec");
-      await stepPublish(jobId);
-    }
     await stepFinish(jobId, null);
     return { jobId, status: "done" };
   } catch (err) {

@@ -19,7 +19,7 @@ import type { TemplateRegistry } from "../templates/registry.js";
 import { addLogSink, createLogger } from "../util/log.js";
 import type { JobBus } from "./events.js";
 import type { JobStore } from "./job-store.js";
-import { failJob, finishJob, runStep, setStatus, skipStep, stageAssets, stageAttachments, stageBuild, stageCompose, stageDeploy, stageDetect, stageDiscover, stageEnrich, stageIngest, stageNormalize, stagePreview, stageResearch, stageShopeeCatalog, stageTemplate, type StageContext } from "./stages.js";
+import { failJob, finishJob, runStep, setStatus, skipStep, stageAssets, stageAttachments, stageBuild, stageCompose, stageDeploy, stageDetect, stageDiscover, stageEnrich, stageIngest, stageNormalize, stagePreview, stageResearch, stageTemplate, type StageContext } from "./stages.js";
 import { siteDirFor } from "../generate/compose.js";
 
 export interface PipelineDeps {
@@ -81,8 +81,6 @@ export async function runJob(jobId: string, deps: PipelineDeps, signal: AbortSig
     await runStep(ctx, "compose", () => stageCompose(ctx));
     await runStep(ctx, "build", () => stageBuild(ctx));
     await runStep(ctx, "deploy", () => stageDeploy(ctx));
-    // Slow, asynchronous Shopee catalogs land after the store is already live; rebuilds if it finds any.
-    await runStep(ctx, "shopee", () => stageShopeeCatalog(ctx));
     return await finishJob(ctx);
   } catch (err) {
     return await failJob(ctx, err);

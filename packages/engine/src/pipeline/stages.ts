@@ -17,8 +17,6 @@ import { chooseTemplateByRules } from "../claude/offline-gateway.js";
 import { CURRENCY_BY_REGION, LOCALE_BY_REGION, detectInput, expandShortLinks } from "../ingest/detect.js";
 import { assemble, captureAttachments, ingestUrls, processAttachments, runDiscovery } from "../ingest/ingest.js";
 import { coverageSummary } from "../ingest/coverage.js";
-import { shopeeScraperProvider } from "../ingest/providers/shopee-scraper-api.js";
-import { isThinSource, type ProviderContext } from "../ingest/providers/types.js";
 import { localizeAssets } from "../generate/assets.js";
 import { buildSite } from "../generate/build.js";
 import { composeSite, composeSiteFiles } from "../generate/compose.js";
@@ -215,8 +213,6 @@ export async function stageAttachments(ctx: StageContext): Promise<StepOutcome> 
   const region = sources.map((s) => s.region).find(Boolean) ?? null;
   const currencyHint = job.input.options.currency?.toUpperCase() || (region ? CURRENCY_BY_REGION[region] ?? null : null);
   const ingest = assemble(sources, input.texts, extracts, discovered, currencyHint);
-  // Kept so a later pass (stageShopeeCatalog) can reassemble without paying for vision again.
-  await deps.jobs.putArtifact(job, "attachment-extracts", extracts);
   await deps.jobs.putArtifact(job, "ingest", ingest);
   await deps.jobs.putArtifact(job, "coverage", ingest.coverage);
   publishProducts(ctx, ingest);
@@ -417,75 +413,6 @@ export async function stagePreview(ctx: StageContext): Promise<StepOutcome> {
   job.preview = true;
   await deps.jobs.save(job);
   return `live at ${job.siteUrl} while the copy and theme are finished`;
-}
-
-/**
- * Shopee's catalog API is asynchronous and slow. Measured against a real MY shop: ~47s before the
- * submit even returns a job id, ~195s to completion, and every call in between is billed. The
- * ingest ladder caps a provider at max(fetchTimeoutMs * 4, 60s), so inline it could only ever time
- * out - paying full price for nothing and adding a minute to every job.
- *
- * So it runs after the store is already live. The merchant sees their site from the fast sources
- * first; Shopee products land in a second wave. If the scrape finds nothing, the finished store is
- * untouched.
- *
- * Writes `shopee-added` so a durable runner can decide whether to spend further steps rebuilding.
- */
-export async function stageShopeeScrape(ctx: StageContext): Promise<StepOutcome> {
-  const { job, deps } = ctx;
-  await deps.jobs.putArtifact(job, "shopee-added", 0);
-  if (!deps.config.rapidApiKey) return { skip: "no RAPIDAPI_KEY" };
-  if (job.input.options.skipBuild) return { skip: "nothing to rebuild" };
-  const sources = (await optionalArtifact<SourceSignals[]>(ctx, "sources")) ?? [];
-  const pctx: ProviderContext = { config: deps.config, log: ctx.log.child("shopee"), signal: ctx.signal, captureDir: deps.jobs.captureDir(job.id), jobId: job.id };
-  const targets = sources.filter((s) => shopeeScraperProvider.supports(s, pctx) && isThinSource(s));
-  if (!targets.length) return { skip: sources.some((s) => s.platform === "shopee") ? "Shopee sources already read" : "no Shopee source" };
-
-  let added = 0;
-  // Serial on purpose: each scrape is minutes long and every poll is billed, so overlapping them
-  // buys nothing and multiplies the spend if one shop is going to fail anyway.
-  for (const source of targets) {
-    const before = source.products.length;
-    progress(ctx, "shopee", `scraping ${source.url} (up to ${Math.round(deps.config.shopeeScraperTimeoutMs / 1000)}s)`);
-    await shopeeScraperProvider.run(source, source, pctx);
-    const gained = source.products.length - before;
-    added += gained;
-    if (gained) source.providers.push(shopeeScraperProvider.id);
-    progress(ctx, "shopee", gained ? `${source.url}: +${gained} products` : `${source.url}: ${source.errors[source.errors.length - 1] ?? "nothing found"}`);
-  }
-  await deps.jobs.putArtifact(job, "sources", sources);
-  if (!added) return { skip: `${targets.length} Shopee source(s) scraped, no products` };
-
-  // Products changed, so the catalog is reassembled here; rebuilding the store is the caller's move.
-  const input = await artifact<IngestInput>(ctx, "input");
-  const discovered = (await optionalArtifact<DetectedUrl[]>(ctx, "discovered")) ?? [];
-  const extracts = (await optionalArtifact<AttachmentExtract[]>(ctx, "attachment-extracts")) ?? [];
-  const region = sources.map((s) => s.region).find(Boolean) ?? null;
-  const currencyHint = job.input.options.currency?.toUpperCase() || (region ? CURRENCY_BY_REGION[region] ?? null : null);
-  const ingest = assemble(sources, input.texts, extracts, discovered, currencyHint);
-  await deps.jobs.putArtifact(job, "ingest", ingest);
-  await deps.jobs.putArtifact(job, "coverage", ingest.coverage);
-  await deps.jobs.putArtifact(job, "shopee-added", added);
-  publishProducts(ctx, ingest);
-  return `+${added} Shopee products; rebuilding`;
-}
-
-/**
- * Scrape and rebuild in one call, for the in-process runner where the whole job is one long-lived
- * task. The durable runner splits these instead, so no single function invocation has to hold both.
- */
-export async function stageShopeeCatalog(ctx: StageContext): Promise<StepOutcome> {
-  const outcome = await stageShopeeScrape(ctx);
-  const added = (await optionalArtifact<number>(ctx, "shopee-added")) ?? 0;
-  if (!added) return outcome;
-  await stageNormalize(ctx);
-  await stageAssets(ctx);
-  await stageEnrich(ctx);
-  await stageTemplate(ctx);
-  // stagePublish, not compose/build/deploy: on a deploy-from-source host (Vercel) there is no
-  // shared disk between steps, so it composes in memory instead.
-  await stagePublish(ctx);
-  return `+${added} Shopee products, store rebuilt${ctx.job.siteUrl ? ` at ${ctx.job.siteUrl}` : ""}`;
 }
 
 export async function stageEnrich(ctx: StageContext): Promise<StepOutcome> {

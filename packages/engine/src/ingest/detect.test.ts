@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appDeepLinkToWeb, classifyUrl, detectInput } from "./detect.js";
+import { appDeepLinkToWeb, classifyUrl, detectInput, regionFromShortHost, SHOPEE_SHORT_HOST } from "./detect.js";
 
 describe("classifyUrl", () => {
   it("classifies TikTok profiles, videos and shop links", () => {
@@ -20,6 +20,19 @@ describe("classifyUrl", () => {
     expect(classifyUrl("https://shopee.sg/Matcha-Kit-i.12345.67890")).toMatchObject({ platform: "shopee", kind: "product", externalId: "12345.67890", region: "sg" });
     expect(classifyUrl("https://shopee.co.id/product/111/222")).toMatchObject({ platform: "shopee", kind: "product", externalId: "111.222", region: "id" });
     expect(classifyUrl("https://shopee.ph/shop/98765")).toMatchObject({ platform: "shopee", kind: "shop", externalId: "98765", region: "ph" });
+  });
+
+  /**
+   * Links copied from the Shopee app's share sheet. These classified as a plain website before,
+   * so a pasted app link reached no Shopee provider at all and the job recorded no URLs.
+   */
+  it("classifies Shopee share-sheet short links and their market", () => {
+    expect(classifyUrl("https://my.shp.ee/DMJnpYqg")).toMatchObject({ platform: "shopee", kind: "shop", region: "my" });
+    expect(classifyUrl("https://sg.shope.ee/abc")).toMatchObject({ platform: "shopee", kind: "shop", region: "sg" });
+    expect(classifyUrl("https://shp.ee/abc")).toMatchObject({ platform: "shopee", kind: "shop", region: null });
+    expect(regionFromShortHost("my.shp.ee")).toBe("my");
+    expect(regionFromShortHost("shp.ee")).toBeNull();
+    expect(SHOPEE_SHORT_HOST.test("shopee.com.my")).toBe(false);
   });
 
   it("classifies Facebook and Lazada and Shopify", () => {

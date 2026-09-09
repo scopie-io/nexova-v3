@@ -593,7 +593,7 @@ function Step({ step, progress }: { step: StepState; progress?: string }) {
  * spends far longer in research and normalize, so its estimate will run under.
  * Regenerate from real builds with: node scripts/job-timings.mjs --median
  */
-const STEP_MS: Record<string, number> = { detect: 600, ingest: 20_000, discover: 1_800, attachments: 2_000, research: 1_500, normalize: 28_300, assets: 9_400, preview: 7_800, enrich: 41_800, template: 1_500, compose: 3_000, build: 1_500, deploy: 1_800, shopee: 195_000 };
+const STEP_MS: Record<string, number> = { detect: 600, ingest: 20_000, discover: 1_800, attachments: 2_000, research: 1_500, normalize: 28_300, assets: 9_400, preview: 7_800, enrich: 41_800, template: 1_500, compose: 3_000, build: 1_500, deploy: 1_800 };
 
 /** Rough time left: the medians of every step that has not finished yet. */
 function remainingMs(steps: StepState[]): number {
