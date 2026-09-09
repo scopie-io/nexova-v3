@@ -17,6 +17,8 @@ import { chooseTemplateByRules } from "../claude/offline-gateway.js";
 import { CURRENCY_BY_REGION, LOCALE_BY_REGION, detectInput, expandShortLinks } from "../ingest/detect.js";
 import { assemble, captureAttachments, ingestUrls, processAttachments, runDiscovery } from "../ingest/ingest.js";
 import { coverageSummary } from "../ingest/coverage.js";
+import { shopeeScraperProvider } from "../ingest/providers/shopee-scraper-api.js";
+import { isThinSource, type ProviderContext } from "../ingest/providers/types.js";
 import { localizeAssets } from "../generate/assets.js";
 import { buildSite } from "../generate/build.js";
 import { composeSite, composeSiteFiles } from "../generate/compose.js";
@@ -213,6 +215,8 @@ export async function stageAttachments(ctx: StageContext): Promise<StepOutcome> 
   const region = sources.map((s) => s.region).find(Boolean) ?? null;
   const currencyHint = job.input.options.currency?.toUpperCase() || (region ? CURRENCY_BY_REGION[region] ?? null : null);
   const ingest = assemble(sources, input.texts, extracts, discovered, currencyHint);
+  // Kept so a later pass (stageShopeeCatalog) can reassemble without paying for vision again.
+  await deps.jobs.putArtifact(job, "attachment-extracts", extracts);
   await deps.jobs.putArtifact(job, "ingest", ingest);
   await deps.jobs.putArtifact(job, "coverage", ingest.coverage);
   publishProducts(ctx, ingest);
@@ -413,6 +417,63 @@ export async function stagePreview(ctx: StageContext): Promise<StepOutcome> {
   job.preview = true;
   await deps.jobs.save(job);
   return `live at ${job.siteUrl} while the copy and theme are finished`;
+}
+
+/**
+ * Shopee's catalog API is asynchronous and slow. Measured against a real MY shop: ~47s before the
+ * submit even returns a job id, ~162s to completion, and every call in between is billed. The
+ * ingest ladder caps a provider at max(fetchTimeoutMs * 4, 60s), so inline it could only ever time
+ * out - paying full price for nothing and adding a minute to every job.
+ *
+ * So it runs here instead, after the store is already live, and rebuilds the store if it finds
+ * anything. The merchant sees their site from the fast sources first; Shopee products land in a
+ * second wave. If the scrape finds nothing, the finished store is untouched.
+ */
+export async function stageShopeeCatalog(ctx: StageContext): Promise<StepOutcome> {
+  const { job, deps } = ctx;
+  if (!deps.config.rapidApiKey) return { skip: "no RAPIDAPI_KEY" };
+  if (job.input.options.skipBuild) return { skip: "nothing to rebuild" };
+  const sources = (await optionalArtifact<SourceSignals[]>(ctx, "sources")) ?? [];
+  const pctx: ProviderContext = { config: deps.config, log: ctx.log.child("shopee"), signal: ctx.signal, captureDir: deps.jobs.captureDir(job.id), jobId: job.id };
+  const targets = sources.filter((s) => shopeeScraperProvider.supports(s, pctx) && isThinSource(s));
+  if (!targets.length) return { skip: sources.some((s) => s.platform === "shopee") ? "Shopee sources already read" : "no Shopee source" };
+
+  let added = 0;
+  // Serial on purpose: each scrape is minutes long and every poll is billed, so overlapping them
+  // buys nothing and multiplies the spend if one shop is going to fail anyway.
+  for (const source of targets) {
+    const before = source.products.length;
+    progress(ctx, "shopee", `scraping ${source.url} (up to ${Math.round(deps.config.shopeeScraperTimeoutMs / 1000)}s)`);
+    await shopeeScraperProvider.run(source, source, pctx);
+    const gained = source.products.length - before;
+    added += gained;
+    if (gained) source.providers.push(shopeeScraperProvider.id);
+    progress(ctx, "shopee", gained ? `${source.url}: +${gained} products` : `${source.url}: ${source.errors[source.errors.length - 1] ?? "nothing found"}`);
+  }
+  await deps.jobs.putArtifact(job, "sources", sources);
+  if (!added) return { skip: `${targets.length} Shopee source(s) scraped, no products` };
+
+  // Products changed, so the catalog has to be rebuilt from `sources` and the store republished.
+  const input = await artifact<IngestInput>(ctx, "input");
+  const discovered = (await optionalArtifact<DetectedUrl[]>(ctx, "discovered")) ?? [];
+  const extracts = (await optionalArtifact<AttachmentExtract[]>(ctx, "attachment-extracts")) ?? [];
+  const region = sources.map((s) => s.region).find(Boolean) ?? null;
+  const currencyHint = job.input.options.currency?.toUpperCase() || (region ? CURRENCY_BY_REGION[region] ?? null : null);
+  const ingest = assemble(sources, input.texts, extracts, discovered, currencyHint);
+  await deps.jobs.putArtifact(job, "ingest", ingest);
+  await deps.jobs.putArtifact(job, "coverage", ingest.coverage);
+  publishProducts(ctx, ingest);
+
+  // Same tail the first pass ran; stagePreview's precedent is to call stages directly rather than
+  // re-enter runStep, so the step list stays one line per pass.
+  await stageNormalize(ctx);
+  await stageAssets(ctx);
+  await stageEnrich(ctx);
+  await stageTemplate(ctx);
+  await stageCompose(ctx);
+  await stageBuild(ctx);
+  await stageDeploy(ctx);
+  return `+${added} Shopee products, store rebuilt${job.siteUrl ? ` at ${job.siteUrl}` : ""}`;
 }
 
 export async function stageEnrich(ctx: StageContext): Promise<StepOutcome> {
