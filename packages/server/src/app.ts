@@ -20,7 +20,7 @@ import { promises as fs } from "node:fs";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
-import { appDeepLinkToWeb, liveDirFor, parseStoreSpec, type Engine, type IncomingFile, type JobEvent, type JobOptions, type JobRecord } from "@nexova/engine";
+import { appDeepLinkToWeb, liveDirFor, parseStoreSpec, SHOPEE_SHORT_HOST, type Engine, type IncomingFile, type JobEvent, type JobOptions, type JobRecord } from "@nexova/engine";
 
 export interface JobLauncher {
   id: string;
@@ -160,7 +160,12 @@ export function createApp(opts: AppOptions): Hono {
     } catch {
       return c.json({ error: "url required" }, 400);
     }
-    if (!/(^|\.)tiktok\.com$/i.test(target.hostname)) return c.json({ error: "only tiktok.com links" }, 400);
+    // Shopee's share sheet hands out my.shp.ee / sg.shope.ee links, which land here for the same
+    // reason TikTok's do: when a pasted link yields nothing, the first question is where it went.
+    const host = target.hostname.replace(/^www\./, "");
+    if (!/(^|\.)tiktok\.com$/i.test(host) && !SHOPEE_SHORT_HOST.test(host)) {
+      return c.json({ error: "only tiktok.com and shopee short links" }, 400);
+    }
     const startedAt = Date.now();
     try {
       const res = await fetch(target.toString(), { method: "GET", redirect: "manual", signal: AbortSignal.timeout(10_000), headers: { "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1" } });
