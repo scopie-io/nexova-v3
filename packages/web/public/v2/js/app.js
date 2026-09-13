@@ -243,9 +243,14 @@ $('#pv-open').addEventListener('click', () => { if (currentUrl) window.open(curr
 const optionsEl = $('#options');
 const optionsBtn = $('#options-toggle');
 const optTemplate = $('#opt-template');
-optionsBtn.addEventListener('click', () => {
-  optionsEl.hidden = !optionsEl.hidden;
-  optionsBtn.classList.toggle('on', !optionsEl.hidden);
+function showOptions(on) {
+  optionsEl.hidden = !on;
+  optionsBtn.classList.toggle('on', on);
+}
+optionsBtn.addEventListener('click', () => showOptions(optionsEl.hidden));
+// the sheet closes on a click anywhere else, or on Escape
+window.addEventListener('pointerdown', (e) => {
+  if (!optionsEl.hidden && !optionsEl.contains(e.target) && !optionsBtn.contains(e.target)) showOptions(false);
 });
 function fillTemplates(list) {
   for (const t of list) {
@@ -636,7 +641,11 @@ input.addEventListener('keydown', (e) => {
 });
 
 // keyboard: Esc closes the preview
-window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !preview.hidden) hidePreview(); });
+window.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (!optionsEl.hidden) showOptions(false);
+  else if (!preview.hidden) hidePreview();
+});
 
 // ---------- boot ----------
 window.nexo = { head, HeadState, api, voice }; // console access: nexo.head.setState('thinking'), nexo.voice.say('…')

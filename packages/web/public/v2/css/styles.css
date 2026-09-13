@@ -223,9 +223,13 @@ button { font-family: inherit; }
   padding: 26px 26px 22px;
 }
 .options {
-  padding: 16px;
+  position: fixed; z-index: 30; top: 66px; right: var(--pad);
+  width: min(440px, calc(100vw - var(--pad) * 2)); max-height: calc(100vh - 90px); max-height: calc(100dvh - 90px);
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: 18px;
   display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px;
-  border-radius: 16px; background: var(--bubble);
+  border-radius: 18px; background: var(--surface); box-shadow: 0 24px 60px rgba(28, 39, 60, .16), 0 2px 6px rgba(28, 39, 60, .06);
+  animation: fade-up .2s ease both;
 }
 .options[hidden] { display: none; }
 .options label { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: var(--t-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--label); font-weight: 700; }
@@ -309,7 +313,7 @@ button { font-family: inherit; }
 .coverage li { margin: 2px 0; }
 
 /* chips: your stores, or link hints while typing */
-.chips { display: flex; gap: 12px; flex-wrap: wrap; }
+.chips { display: flex; gap: 12px; flex-wrap: wrap; max-height: 92px; overflow-y: auto; flex: none; }
 .chips:empty { display: none; }
 .chips button, .chips .hint {
   font-size: var(--t-small); font-weight: 500; color: var(--ink-2); white-space: nowrap;
@@ -321,8 +325,9 @@ button { font-family: inherit; }
 .chips .hint { color: var(--label); }
 
 /* attached screenshots / files, above the composer */
-.files { display: flex; gap: 8px; flex-wrap: wrap; }
+.files { display: flex; gap: 8px; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
 .files[hidden] { display: none; }
+.file { flex: none; }
 .file {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 4px 6px 4px 4px; border-radius: 12px;
@@ -399,7 +404,7 @@ button { font-family: inherit; }
 @media (max-width: 760px) {
   .tagline { display: none; }
 }
-@media (max-width: 900px) {
+@media (max-width: 900px) and (orientation: portrait) {
   /* one screen, no scrolling: header, then the stage takes what the conversation leaves */
   body { height: 100vh; height: 100dvh; overflow: hidden; }
   .top { height: auto; padding: 18px var(--pad) 0; flex-direction: column; align-items: center; gap: 12px; }
@@ -439,7 +444,8 @@ button { font-family: inherit; }
   .composer { min-height: 58px; padding: 6px 6px 6px 18px; }
   .composer textarea { padding: 11px 0; height: 46px; line-height: 24px; font-size: 15px; }
   .send { height: 46px; padding: 0 16px; }
-  .options { grid-template-columns: 1fr; }
+  /* options as a sheet from the bottom */
+  .options { top: auto; bottom: 12px; left: 12px; right: 12px; width: auto; max-height: 72vh; max-height: 72dvh; grid-template-columns: 1fr; }
   .build .name { max-width: 100%; }
   .device.mobile iframe { width: 100%; border-width: 0; border-radius: 18px; }
   .preview-bar { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 0; padding: 0 0 8px; gap: 4px; }
@@ -447,4 +453,25 @@ button { font-family: inherit; }
   .preview-title span { min-width: 0; }
   .preview-actions { width: 100%; justify-content: space-between; gap: 2px; }
   .preview-actions button { padding: 6px 4px; letter-spacing: .16em; }
+}
+@media (max-width: 900px) and (orientation: landscape) {
+  /* a phone on its side: the two columns, compacted */
+  body { height: 100vh; height: 100dvh; overflow: hidden; }
+  .top { height: 52px; padding: 10px var(--pad) 0; }
+  .logo { height: 20px; }
+  .tagline { display: none; }
+  .live { padding: 8px 14px; }
+  .hero { grid-template-columns: minmax(0, 1fr) minmax(300px, 46%); column-gap: 16px; }
+  .stage { grid-template-columns: 116px minmax(0, 1fr); column-gap: 4px; }
+  .caption { padding-left: 0; }
+  .say { min-height: 0; max-width: 116px; font-size: 12.5px; }
+  .head { width: min(90%, calc((100vh - 170px) * 1.252)); top: 48%; }
+  .chat { padding: 8px 0 10px; }
+  .card { padding: 12px 12px 10px; gap: 10px; }
+  .messages { min-height: 48px; }
+  .bubble { padding: 10px 14px; }
+  .composer { min-height: 52px; padding: 4px 4px 4px 14px; }
+  .composer textarea { padding: 10px 0; height: 44px; line-height: 24px; font-size: 15px; }
+  .send { height: 44px; padding: 0 14px; }
+  .options { grid-template-columns: 1fr 1fr; }
 }
