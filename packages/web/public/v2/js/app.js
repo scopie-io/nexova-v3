@@ -177,7 +177,9 @@ soundBtn.addEventListener('click', () => applySound(!voice.sound));
 let health = null;
 function setPill(t) {
   const rest = t === 'ONLINE';
-  liveText.textContent = rest ? (!health ? 'NO API' : health.offline ? 'OFFLINE MODE' : 'ONLINE') : t;
+  // phones get the short form of the one long state, so the row of controls never overflows
+  const offline = matchMedia('(max-width: 480px)').matches ? 'OFFLINE' : 'OFFLINE MODE';
+  liveText.textContent = rest ? (!health ? 'NO API' : health.offline ? offline : 'ONLINE') : t;
   livePill.classList.toggle('busy', /THINKING|DESIGNING|BUILDING/.test(t));
   livePill.classList.toggle('off', rest && (!health || health.offline));
 }
@@ -645,19 +647,19 @@ input.addEventListener('keydown', (e) => {
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !preview.hidden) hidePreview(); });
 
 // ---------- boot ----------
-window.nexo = { head, HeadState, api }; // console access: nexo.head.setState('thinking')
+window.nexo = { head, HeadState, api, voice }; // console access: nexo.head.setState('thinking'), nexo.voice.say('…')
 
 const [h, t, s] = await Promise.allSettled([api.health(), api.templates(), api.stores()]);
 applyHealth(h.status === 'fulfilled' ? h.value : null);
 // NEXOVA AI's own voice when the server has one; the lines it will say are fetched ahead
 voice.tts = !!health?.voice;
-voice.load(Object.values(LINES));
+await voice.load(Object.values(LINES)); // the greeting must know its clip exists
 if (t.status === 'fulfilled') fillTemplates(t.value);
 stores = s.status === 'fulfilled' ? s.value : [];
 
 addMessage('ai').innerHTML = '<p>Paste your TikTok Shop or Shopee link. Your store goes live here.</p>';
 renderChips();
-setTimeout(() => { if (!run) say(LINES.greeting); }, 1100);
+setTimeout(() => { if (!run) say(LINES.greeting); }, 900);
 
 // resume a build from the URL (?job=…), like the classic home
 const resumeId = new URLSearchParams(location.search).get('job');

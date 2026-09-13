@@ -38,22 +38,32 @@ export class Voice {
     this._ctx = null; this._analyser = null; this._data = null;
 
     // the first interaction unlocks audio: voice the line that is still on screen, if any
-    const unlock = () => { if (this._current?.pending) this._current.pending(); };
+    const unlock = () => {
+      if (this._ctx?.state === 'suspended') this._ctx.resume().catch(() => {});
+      if (this._current?.pending) this._current.pending();
+    };
     window.addEventListener('pointerdown', unlock, { passive: true });
     window.addEventListener('keydown', unlock);
   }
 
-  /** which lines have a recorded clip; then warm the cache for the lines the head will say */
+  /** which lines have a recorded clip (awaited), then warm the clips: the first line now, the rest when idle */
   async load(lines) {
     try {
       const r = await fetch('/v2/voice/manifest.json');
       this._manifest = new Map(Object.entries(r.ok ? await r.json() : {}));
     } catch { this._manifest = new Map(); }
-    for (const t of lines) {
-      if (this._manifest.has(slug(t))) { this._clip(t); continue; }
-      if (!this.tts || Date.now() < this._ttsDownUntil) continue;
-      if (!(await this._clip(t))) break; // the service is unhappy: stop asking
-    }
+    const [first, ...rest] = lines;
+    if (first) this._clip(first);
+    if (navigator.connection?.saveData) return;
+    const warm = async () => {
+      for (const t of rest) {
+        if (this._manifest.has(slug(t))) { this._clip(t); continue; }
+        if (!this.tts || Date.now() < this._ttsDownUntil) continue;
+        if (!(await this._clip(t))) break; // the service is unhappy: stop asking
+      }
+    };
+    if ('requestIdleCallback' in window) requestIdleCallback(() => warm(), { timeout: 4000 });
+    else setTimeout(warm, 2500);
   }
 
   say(text) {
@@ -149,22 +159,30 @@ export class Voice {
     const url = URL.createObjectURL(blob);
     const audio = this._audio;
     const timing = this._manifest?.get(slug(text)); // the spoken part of a recorded clip
-    const start = () => {
+    const play = async () => {
       if (token !== this._token) return;
-      h.onVoiced();
-      h.audio = true;
-      this._graph();
-      this.head.setState(HeadState.SPEAKING); // a late (unlocked) playback brings it back from rest
       audio.src = url;
       audio.onended = () => { URL.revokeObjectURL(url); h.finish(); h.rest(); };
       audio.onerror = () => { URL.revokeObjectURL(url); h.finish(); h.rest(); };
-      const loop = () => {
+      await audio.play(); // rejects while autoplay is still blocked: nothing below runs then
+      if (token !== this._token) { audio.pause(); return; }
+      h.onVoiced();
+      h.audio = true;
+      // the real amplitude, once the page has been interacted with (a context made earlier stays silent)
+      if (navigator.userActivation?.hasBeenActive !== false) this._graph();
+      if (this._ctx?.state === 'suspended') this._ctx.resume().catch(() => {});
+      this.head.setState(HeadState.SPEAKING); // a late (unlocked) playback brings it back from rest
+      const t0 = performance.now();
+      const loop = (now) => {
         if (token !== this._token) return;
         if (this._analyser) {
           this._analyser.getByteFrequencyData(this._data);
           let sum = 0;
           for (const v of this._data) sum += v;
           this.head.setAudioLevel(Math.min(1, (sum / this._data.length / 255) * 2.2));
+        } else {
+          const s = (now - t0) / 1000;
+          this.head.setAudioLevel(0.3 + 0.25 * Math.abs(Math.sin(s * 9.3)) + 0.2 * Math.abs(Math.sin(s * 23.7)));
         }
         // the words follow the voice, a beat ahead so a word is on screen as it is heard
         const from = timing?.start ?? 0, to = timing?.end ?? audio.duration;
@@ -173,15 +191,13 @@ export class Voice {
       };
       cancelAnimationFrame(this._raf);
       this._raf = requestAnimationFrame(loop);
-      if (this._ctx?.state === 'suspended') this._ctx.resume().catch(() => {});
-      return audio.play();
     };
     try {
-      await start();
+      await play();
     } catch {
       // autoplay is blocked until the first click or key: read it out now, voice it then if still on screen
       h.typewriter();
-      if (this._current?.token === token) this._current.pending = () => { this._current.pending = null; start()?.catch(() => {}); };
+      if (this._current?.token === token) this._current.pending = () => { this._current.pending = null; play().catch(() => {}); };
     }
   }
   _graph() {

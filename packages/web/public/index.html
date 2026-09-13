@@ -10,7 +10,7 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preload" href="/fonts/Satoshi-Regular.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/Satoshi-Bold.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/v2/img/helmet.webp" as="image" type="image/webp">
+<link rel="preload" as="image" type="image/webp" imagesrcset="/v2/img/helmet-640.webp 640w, /v2/img/helmet.webp 1280w" imagesizes="(max-width: 900px) 78vw, 34vw">
 <link rel="stylesheet" href="/v2/css/styles.css">
 </head>
 <body>
@@ -49,10 +49,10 @@
 
       <div class="figure">
         <div class="head" id="head" data-state="idle">
-          <img class="head-shadow" src="/v2/img/helmet-shadow.webp" alt="" aria-hidden="true" width="1114" height="142">
+          <img class="head-shadow" src="/v2/img/helmet-shadow.webp" alt="" aria-hidden="true" width="1114" height="142" decoding="async">
           <div class="head-tilt">
             <div class="head-body">
-              <img class="head-img" src="/v2/img/helmet.webp" srcset="/v2/img/helmet-640.webp 640w, /v2/img/helmet.webp 1280w" sizes="(max-width: 900px) 78vw, 34vw" alt="NEXOVA AI" width="1280" height="1022" decoding="async">
+              <img class="head-img" src="/v2/img/helmet.webp" srcset="/v2/img/helmet-640.webp 640w, /v2/img/helmet.webp 1280w" sizes="(max-width: 900px) 78vw, 34vw" alt="NEXOVA AI" width="1280" height="1022" decoding="async" fetchpriority="high">
               <!-- the life on the visor, drawn in the helmet image's own coordinates -->
               <svg class="head-fx" viewBox="0 0 1093 873" aria-hidden="true">
                 <defs>

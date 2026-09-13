@@ -6,7 +6,6 @@
 @font-face { font-family: "Satoshi"; src: url("/fonts/Satoshi-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
 @font-face { font-family: "Satoshi"; src: url("/fonts/Satoshi-Medium.woff2")  format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
 @font-face { font-family: "Satoshi"; src: url("/fonts/Satoshi-Bold.woff2")    format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
-@font-face { font-family: "Satoshi"; src: url("/fonts/Satoshi-Black.woff2")   format("woff2"); font-weight: 900; font-style: normal; font-display: swap; }
 
 :root {
   --bg: #f8f8fa;
@@ -30,7 +29,15 @@
   --font: "Satoshi", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --pad: clamp(20px, 2.9vw, 52px);
   --radius: 24px;
+  /* type scale: one label style for every small-caps label, one body, one small */
+  --t-label: 10.5px; --ls-label: .28em;
+  --t-name: 13px;   --ls-name: .3em;
+  --t-step: 11px;
+  --t-say: 14px;
+  --t-body: 16px;
+  --t-small: 13px;
 }
+.label { font-size: var(--t-label); letter-spacing: var(--ls-label); font-weight: 700; text-transform: uppercase; }
 
 * { box-sizing: border-box; }
 html, body { height: 100%; }
@@ -66,22 +73,22 @@ button { font-family: inherit; }
 .brand { display: flex; align-items: center; gap: 20px; text-decoration: none; color: inherit; }
 .logo { height: 27px; width: auto; display: block; }
 .tagline {
-  font-size: 10.5px; letter-spacing: .3em; color: #5c6779; white-space: nowrap; line-height: 1;
+  font-size: var(--t-label); letter-spacing: var(--ls-label); color: #5c6779; white-space: nowrap; line-height: 1;
   padding-left: 20px; border-left: 1px solid var(--line2);
 }
 .top-right { display: flex; align-items: center; gap: 26px; }
 .text-btn {
   background: none; border: 0; padding: 6px 0; cursor: pointer; white-space: nowrap;
-  color: var(--label); font-size: 10.5px; letter-spacing: .28em; font-weight: 700; transition: color .2s;
+  color: var(--label); font-size: var(--t-label); letter-spacing: var(--ls-label); font-weight: 700; transition: color .2s;
 }
 .text-btn:hover, .text-btn.on { color: var(--ink); }
 .live {
   display: inline-flex; align-items: center; gap: 10px;
   padding: 11px 20px; border-radius: 999px;
   background: var(--surface); box-shadow: var(--shadow-pill);
-  color: var(--ink); font-size: 10.5px; letter-spacing: .28em; font-weight: 700; white-space: nowrap;
+  color: var(--ink); font-size: var(--t-label); letter-spacing: var(--ls-label); font-weight: 700; white-space: nowrap;
 }
-.live b { font-weight: 700; margin-right: -.28em; }
+.live b { font-weight: 700; margin-right: calc(var(--ls-label) * -1); }
 .live i { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px rgba(34, 212, 61, .15); transition: background .3s, box-shadow .3s; }
 .live.busy i { background: var(--blue); box-shadow: 0 0 0 3px rgba(79, 157, 255, .18); animation: blip 1.4s ease-in-out infinite; }
 .live.off i { background: var(--yellow); box-shadow: 0 0 0 3px rgba(255, 206, 51, .2); }
@@ -104,10 +111,10 @@ button { font-family: inherit; }
   align-items: center;
 }
 .caption { position: relative; z-index: 2; padding: 0 0 4px 8px; }
-.callout-name { font-size: 13.5px; letter-spacing: .3em; color: var(--ink); font-weight: 700; margin-bottom: 14px; }
+.callout-name { font-size: var(--t-name); letter-spacing: var(--ls-name); color: var(--ink); font-weight: 700; margin-bottom: 14px; }
 .steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
 .steps li {
-  position: relative; font-size: 11px; letter-spacing: .28em; color: var(--label); line-height: 1.3;
+  position: relative; font-size: var(--t-step); letter-spacing: var(--ls-label); color: var(--label); line-height: 1.3;
   transition: color .35s;
 }
 .steps li::before {
@@ -119,7 +126,7 @@ button { font-family: inherit; }
 .steps li.active::before { background: var(--blue); box-shadow: 0 0 0 3px rgba(79, 157, 255, .18); }
 .caption .rule { display: block; width: 34px; height: 1px; background: #c8ced6; margin-top: 18px; }
 /* what the head is saying */
-.say { margin: 14px 0 0; min-height: 4.6em; max-width: 190px; font-size: 13.5px; line-height: 1.55; color: var(--ink); }
+.say { margin: 14px 0 0; min-height: 4.6em; max-width: 190px; font-size: var(--t-say); line-height: 1.55; color: var(--ink); }
 .figure { position: relative; min-width: 0; height: 100%; --pv-top: clamp(20px, 6.7vh, 60px); }
 
 /* ---- the head: the reference render, floating, its shadow on the floor ---- */
@@ -183,7 +190,7 @@ button { font-family: inherit; }
 .preview[hidden] { display: none; }
 .preview-bar { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 61px; padding: 0 2px 12px 92px; }
 .preview-title {
-  min-width: 0; font-size: 10.5px; letter-spacing: .3em; color: var(--ink); font-weight: 700;
+  min-width: 0; font-size: var(--t-label); letter-spacing: var(--ls-label); color: var(--ink); font-weight: 700;
   display: flex; gap: 10px; align-items: center;
 }
 .preview-title i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 3px rgba(79, 157, 255, .18); animation: blip 1.6s infinite; }
@@ -191,7 +198,7 @@ button { font-family: inherit; }
 .preview-actions { display: flex; gap: 8px; flex: none; }
 .preview-actions button {
   background: none; border: 0; color: var(--label);
-  font-size: 9.5px; letter-spacing: .24em; font-weight: 700; padding: 8px 10px; border-radius: 999px; cursor: pointer;
+  font-size: var(--t-label); letter-spacing: var(--ls-label); font-weight: 700; padding: 8px 10px; border-radius: 999px; cursor: pointer;
   white-space: nowrap; transition: .2s;
 }
 .preview-actions button:hover { color: var(--ink); }
@@ -221,12 +228,12 @@ button { font-family: inherit; }
   border-radius: 16px; background: var(--bubble);
 }
 .options[hidden] { display: none; }
-.options label { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 9.5px; letter-spacing: .22em; text-transform: uppercase; color: var(--label); font-weight: 700; }
+.options label { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: var(--t-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--label); font-weight: 700; }
 .options .wide, .options .check { grid-column: 1 / -1; }
 .options .check { flex-direction: row; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 400; color: var(--ink-2); }
 .options input, .options select {
   min-width: 0; background: var(--surface); border: 1px solid var(--line2); color: var(--ink);
-  border-radius: 10px; padding: 9px 11px; font: inherit; font-size: 13.5px;
+  border-radius: 10px; padding: 9px 11px; font: inherit; font-size: var(--t-small);
 }
 .options input[type="checkbox"] { width: 15px; height: 15px; padding: 0; accent-color: var(--blue); }
 .options input:focus, .options select:focus { outline: 0; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(79, 157, 255, .15); }
@@ -247,7 +254,7 @@ button { font-family: inherit; }
   border-radius: 18px;
   background: var(--bubble);
   padding: 18px 22px;
-  font-size: 16px; line-height: 1.58; color: var(--ink);
+  font-size: var(--t-body); line-height: 1.58; color: var(--ink);
   overflow-wrap: anywhere;
 }
 .msg.user .bubble { background: var(--blue-soft); border-bottom-right-radius: 6px; }
@@ -263,25 +270,25 @@ button { font-family: inherit; }
   background: var(--blue); animation: blink 1s steps(2) infinite;
 }
 .bubble.error { background: #fff7e8; color: #6b4a12; }
-.bubble .note { color: var(--label); font-size: 13.5px; }
-.bubble .files-note { display: block; margin-top: 6px; font-size: 12.5px; color: var(--muted); }
+.bubble .note { color: var(--label); font-size: var(--t-small); }
+.bubble .files-note { display: block; margin-top: 6px; font-size: var(--t-small); color: var(--muted); }
 
 /* the build inside a reply: name · what it is doing · actions */
 .build {
   margin-top: 14px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px;
   padding: 12px 12px 12px 16px; border-radius: 14px;
   background: var(--surface);
-  font-size: 11.5px; letter-spacing: .1em; color: var(--ink);
+  font-size: var(--t-small); color: var(--ink);
 }
 .build i { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 3px rgba(79, 157, 255, .18); flex: none; }
 .build.working i { animation: blip 1s infinite; }
 .build.failed i { background: var(--yellow); box-shadow: 0 0 0 3px rgba(255, 206, 51, .25); }
 .build .name { min-width: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
-.build .meta { flex: 1 1 auto; min-width: 0; color: var(--muted); letter-spacing: .02em; font-size: 12.5px; line-height: 1.4; }
+.build .meta { flex: 1 1 auto; min-width: 0; color: var(--muted); font-size: var(--t-small); line-height: 1.4; }
 .build .actions { margin-left: auto; display: flex; gap: 6px; flex: none; }
 .build button {
   flex: none; background: var(--blue); color: #fff; border: 1px solid transparent; border-radius: 999px;
-  font-size: 9.5px; letter-spacing: .24em; font-weight: 700; padding: 9px 14px; cursor: pointer; transition: .2s;
+  font-size: var(--t-label); letter-spacing: var(--ls-label); font-weight: 700; padding: 9px 14px; cursor: pointer; transition: .2s;
 }
 .build button:hover { background: var(--blue-2); }
 .build button.ghost { background: none; color: var(--label); }
@@ -297,7 +304,7 @@ button { font-family: inherit; }
 .peek .more { flex: none; width: 72px; height: 72px; display: grid; place-items: center; border: 1px dashed var(--line2); border-radius: 10px; font-size: 11px; color: var(--label); }
 
 /* what the engine could read, after the build */
-.coverage { margin-top: 12px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.coverage { margin-top: 12px; font-size: var(--t-small); line-height: 1.5; color: var(--muted); }
 .coverage ul { margin: 6px 0 0; padding-left: 18px; }
 .coverage li { margin: 2px 0; }
 
@@ -305,12 +312,12 @@ button { font-family: inherit; }
 .chips { display: flex; gap: 12px; flex-wrap: wrap; }
 .chips:empty { display: none; }
 .chips button, .chips .hint {
-  font-size: 13px; font-weight: 500; color: var(--ink-2); white-space: nowrap;
+  font-size: var(--t-small); font-weight: 500; color: var(--ink-2); white-space: nowrap;
   background: var(--bubble); border: 0; border-radius: 999px; padding: 9px 16px; transition: .2s;
 }
 .chips button { cursor: pointer; }
 .chips button:hover { color: var(--ink); background: #eceef2; }
-.chips button[data-add-files] { color: var(--blue-2); font-size: 10.5px; letter-spacing: .24em; font-weight: 700; padding: 10px 16px; }
+.chips button[data-add-files] { color: var(--blue-2); font-size: var(--t-label); letter-spacing: var(--ls-label); font-weight: 700; padding: 10px 16px; }
 .chips .hint { color: var(--label); }
 
 /* attached screenshots / files, above the composer */
@@ -320,7 +327,7 @@ button { font-family: inherit; }
   display: inline-flex; align-items: center; gap: 8px;
   padding: 4px 6px 4px 4px; border-radius: 12px;
   background: var(--surface); border: 1px solid var(--line2);
-  font-size: 12.5px; color: var(--ink-2);
+  font-size: var(--t-small); color: var(--ink-2);
 }
 .file img { width: 30px; height: 30px; object-fit: cover; border-radius: 8px; display: block; }
 .file b { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; background: var(--blue-soft); color: var(--blue-2); font-size: 9px; letter-spacing: .08em; }
@@ -339,14 +346,14 @@ button { font-family: inherit; }
 .composer.dragging { box-shadow: 0 0 0 2px var(--blue); }
 .composer textarea {
   flex: 1; min-width: 0; background: none; border: 0; outline: 0; resize: none;
-  color: var(--ink); font: inherit; font-size: 16.5px; line-height: 24px;
+  color: var(--ink); font: inherit; font-size: var(--t-body); line-height: 24px;
   padding: 14px 0; height: 52px; max-height: 168px; overflow-y: auto;
   scrollbar-width: thin; scrollbar-color: rgba(28, 39, 60, .18) transparent;
 }
 .composer textarea::placeholder { color: #98a2b0; }
 .send {
   flex: none; height: 52px; padding: 0 26px; border-radius: 999px; border: 0; cursor: pointer;
-  background: var(--ink); color: #fff; font-size: 11px; letter-spacing: .26em; font-weight: 700;
+  background: var(--ink); color: #fff; font-size: var(--t-label); letter-spacing: var(--ls-label); font-weight: 700;
   transition: .2s;
 }
 .send:hover { background: #24344e; }
@@ -357,7 +364,7 @@ button { font-family: inherit; }
   position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 12px);
   z-index: 50; opacity: 0; pointer-events: none;
   background: var(--ink); color: #fff;
-  padding: 11px 18px; border-radius: 999px; font-size: 13px; letter-spacing: .02em;
+  padding: 11px 18px; border-radius: 999px; font-size: var(--t-small);
   transition: opacity .25s, transform .25s;
   box-shadow: 0 20px 50px rgba(28, 39, 60, .25);
 }
@@ -394,11 +401,14 @@ button { font-family: inherit; }
 }
 @media (max-width: 900px) {
   body { height: auto; min-height: 100vh; min-height: 100dvh; overflow-x: hidden; overflow-y: auto; }
-  /* the state and OPTIONS drop under the logo when the row is too tight */
-  .top { height: auto; padding: 18px var(--pad) 0; flex-wrap: wrap; row-gap: 12px; }
-  .top-right { margin-left: auto; }
-  .logo { height: 23px; }
-  .live { padding: 9px 16px; }
+  /* the logo alone, centred; the controls in one centred row beneath it */
+  .top { height: auto; padding: 22px var(--pad) 0; flex-direction: column; align-items: center; gap: 14px; }
+  .brand { justify-content: center; }
+  .logo { height: 24px; }
+  .top-right { gap: 16px; max-width: 100%; }
+  .text-btn { letter-spacing: .22em; }
+  .live { padding: 9px 14px; letter-spacing: .22em; }
+  .live b { margin-right: -.22em; }
   .hero { grid-template-columns: 1fr; row-gap: 8px; padding: 6px var(--pad) 0; }
   /* the head centred on its own row, the caption beneath it */
   .stage { grid-template-columns: 1fr; row-gap: 14px; padding-top: 14px; }
@@ -406,7 +416,7 @@ button { font-family: inherit; }
   .head { width: min(78vw, 400px); top: 44%; }
   .stage.previewing .head { width: 64px; }
   .caption { order: 2; padding: 0; text-align: center; }
-  .say { margin: 12px auto 0; min-height: 0; max-width: 300px; }
+  .say { margin: 12px auto 0; min-height: 3.1em; max-width: 300px; }
   .callout-name { margin-bottom: 10px; }
   .steps { display: grid; grid-template-columns: auto auto; justify-content: center; gap: 8px 26px; }
   .steps li { text-align: left; padding-left: 12px; }
@@ -418,20 +428,19 @@ button { font-family: inherit; }
   .chat { padding: 10px 0 16px; }
   .card { flex: none; padding: 18px 16px 16px; gap: 12px; }
   .messages { flex: none; min-height: 96px; max-height: 42vh; }
-  .bubble { font-size: 15px; padding: 14px 16px; }
+  .bubble { padding: 14px 16px; }
   .chips { flex-wrap: nowrap; overflow-x: auto; padding: 4px 0 6px; scrollbar-width: none; }
   .chips::-webkit-scrollbar { display: none; }
-  .chips button { flex: none; font-size: 13px; padding: 9px 14px; }
+  .chips button { flex: none; padding: 9px 14px; }
   .composer { min-height: 62px; padding: 7px 7px 7px 18px; }
-  .composer textarea { padding: 13px 0; height: 48px; font-size: 15px; line-height: 22px; }
+  .composer textarea { padding: 12px 0; height: 48px; line-height: 24px; }
   .send { height: 48px; padding: 0 18px; }
-  .top-right { gap: 16px; }
   .options { grid-template-columns: 1fr; }
   .build .name { max-width: 100%; }
   .device.mobile iframe { width: 100%; border-width: 0; border-radius: 18px; }
   .preview-bar { flex-wrap: wrap; gap: 8px 14px; }
   .preview-title { flex: 1 1 100%; }
   .preview-actions { gap: 6px; }
-  .preview-actions button { padding: 7px 9px; letter-spacing: .16em; }
+  .preview-actions button { padding: 7px 8px; letter-spacing: .18em; }
   .chat { padding-bottom: 24px; }
 }
