@@ -22,7 +22,6 @@ async function j(res) {
 const api = {
   health: () => fetch('/api/health').then(j),
   templates: () => fetch('/api/templates').then(j),
-  stores: () => fetch('/api/stores').then(j),
   job: (id) => fetch(`/api/jobs/${encodeURIComponent(id)}`).then(j),
   coverage: (id) => fetch(`/api/jobs/${encodeURIComponent(id)}/coverage`).then(j),
   createJob(input, options, files = []) {
@@ -84,7 +83,6 @@ const LINES = {
   cancelled: 'Cancelled.',
   stopped: 'The build stopped.',
   rebuilding: 'Rebuilding.',
-  hereItIs: 'Here it is.',
 };
 // Wall-clock medians per step from a measured build (see packages/web/src/App.tsx) — for the ETA.
 const STEP_MS = { detect: 600, ingest: 20_000, discover: 1_800, attachments: 2_000, research: 1_500, normalize: 28_300, assets: 9_400, preview: 7_800, enrich: 41_800, template: 1_500, compose: 3_000, build: 1_500, deploy: 1_800 };
@@ -262,29 +260,18 @@ function buildOptions() {
   };
 }
 
-// ---------- chips: what the links are while typing (and a way to add screenshots), your stores otherwise ----------
+// ---------- chips: what the pasted links are, and a way to add screenshots ----------
 const chipsEl = $('#chips');
-let stores = [];
 function renderChips() {
   const hints = hintsFor(input.value);
-  if (hints.length) {
-    const wantsShots = hints.some((h) => h.screenshotsHelp);
-    chipsEl.innerHTML = hints.map((h) => `<span class="hint">${esc(h.label)}</span>`).join('')
-      + (wantsShots ? '<button type="button" data-add-files>ADD SCREENSHOTS</button>' : '');
-    return;
-  }
-  chipsEl.innerHTML = stores.slice(0, 3).map((s) => `<button type="button" data-store="${esc(s.name || s.slug)}" data-url="${esc(s.siteUrl || `/s/${s.slug}/`)}">${esc(s.name || s.slug)}</button>`).join('');
+  if (!hints.length) { chipsEl.innerHTML = ''; return; }
+  const wantsShots = hints.some((h) => h.screenshotsHelp);
+  chipsEl.innerHTML = hints.map((h) => `<span class="hint">${esc(h.label)}</span>`).join('')
+    + (wantsShots ? '<button type="button" data-add-files>ADD SCREENSHOTS</button>' : '');
 }
 chipsEl.addEventListener('click', (e) => {
-  const b = e.target.closest('button');
-  if (!b) return;
-  if (b.dataset.addFiles !== undefined) { fileInput.click(); return; }
-  if (b.dataset.store) { showPreview(b.dataset.url, b.dataset.store); setPill('LIVE'); say(LINES.hereItIs); }
+  if (e.target.closest('button[data-add-files]')) fileInput.click();
 });
-async function refreshStores() {
-  stores = await api.stores().catch(() => stores);
-  renderChips();
-}
 
 // ---------- attachments: screenshots & CSV (the chip, drag & drop, paste) ----------
 const composer = $('#composer');
@@ -479,7 +466,6 @@ async function finishRun(r) {
     if (siteUrl) showPreview(siteUrl, job.slug || 'your store', { reload: r.earlyPreview });
     say(siteUrl ? LINES.live : LINES.dataReady);
     await loadCoverage(r);
-    refreshStores();
   } else {
     steps.reset();
     idle();
@@ -649,13 +635,12 @@ window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !preview.h
 // ---------- boot ----------
 window.nexo = { head, HeadState, api, voice }; // console access: nexo.head.setState('thinking'), nexo.voice.say('…')
 
-const [h, t, s] = await Promise.allSettled([api.health(), api.templates(), api.stores()]);
+const [h, t] = await Promise.allSettled([api.health(), api.templates()]);
 applyHealth(h.status === 'fulfilled' ? h.value : null);
 // NEXOVA AI's own voice when the server has one; the lines it will say are fetched ahead
 voice.tts = !!health?.voice;
 await voice.load(Object.values(LINES)); // the greeting must know its clip exists
 if (t.status === 'fulfilled') fillTemplates(t.value);
-stores = s.status === 'fulfilled' ? s.value : [];
 
 addMessage('ai').innerHTML = '<p>Paste your TikTok Shop or Shopee link. Your store goes live here.</p>';
 renderChips();

@@ -400,47 +400,51 @@ button { font-family: inherit; }
   .tagline { display: none; }
 }
 @media (max-width: 900px) {
-  body { height: auto; min-height: 100vh; min-height: 100dvh; overflow-x: hidden; overflow-y: auto; }
-  /* the logo alone, centred; the controls in one centred row beneath it */
-  .top { height: auto; padding: 22px var(--pad) 0; flex-direction: column; align-items: center; gap: 14px; }
+  /* one screen, no scrolling: header, then the stage takes what the conversation leaves */
+  body { height: 100vh; height: 100dvh; overflow: hidden; }
+  .top { height: auto; padding: 18px var(--pad) 0; flex-direction: column; align-items: center; gap: 12px; }
   .brand { justify-content: center; }
   .logo { height: 24px; }
   .top-right { gap: 16px; max-width: 100%; }
   .text-btn { letter-spacing: .22em; }
   .live { padding: 9px 14px; letter-spacing: .22em; }
   .live b { margin-right: -.22em; }
-  .hero { grid-template-columns: 1fr; row-gap: 8px; padding: 6px var(--pad) 0; }
-  /* the head centred on its own row, the caption beneath it */
-  .stage { grid-template-columns: 1fr; row-gap: 14px; padding-top: 14px; }
-  .figure { order: 1; height: calc(min(78vw, 400px) * .95); --pv-top: 0px; }
-  .head { width: min(78vw, 400px); top: 44%; }
-  .stage.previewing .head { width: 64px; }
-  .caption { order: 2; padding: 0; text-align: center; }
-  .say { margin: 12px auto 0; min-height: 3.1em; max-width: 300px; }
-  .callout-name { margin-bottom: 10px; }
-  .steps { display: grid; grid-template-columns: auto auto; justify-content: center; gap: 8px 26px; }
+  .hero { display: flex; flex-direction: column; gap: 6px; padding: 4px var(--pad) 0; min-height: 0; }
+  .stage { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; align-items: stretch; gap: 0; }
+  /* the head fills the room it has; the caption sits beneath it */
+  .figure { order: 1; flex: 1 1 0; min-height: 0; container-type: size; --pv-top: 0px; }
+  .head { width: min(78vw, 400px, 106cqh); top: 47%; }
+  .caption { order: 2; flex: none; padding: 6px 0 4px; text-align: center; }
+  /* presenting on a phone: a small head beside the title, the controls on their own row,
+     the beats folded away, and the conversation folded to make room for the store */
+  .stage.previewing .head { width: 44px; }
+  .stage.previewing .steps, .stage.previewing .caption .rule { display: none; }
+  .stage.previewing .say { min-height: 0; margin-top: 4px; }
+  .hero:has(.stage.previewing) .chat { max-height: 36%; }
+  .say { margin: 10px auto 0; min-height: 2.4em; max-width: 320px; font-size: 13.5px; }
+  .callout-name { margin-bottom: 8px; }
+  .steps { display: grid; grid-template-columns: auto auto; justify-content: center; gap: 6px 26px; }
   .steps li { text-align: left; padding-left: 12px; }
   .steps li::before { left: 0; }
-  .caption .rule { margin: 14px auto 0; }
-  .stage.previewing .figure { height: 68vh; }
+  .caption .rule { margin: 10px auto 0; }
   .preview { inset: 0; }
-  .preview-bar { min-height: 52px; padding-left: 78px; }
-  .chat { padding: 10px 0 16px; }
-  .card { flex: none; padding: 18px 16px 16px; gap: 12px; }
-  .messages { flex: none; min-height: 96px; max-height: 42vh; }
-  .bubble { padding: 14px 16px; }
-  .chips { flex-wrap: nowrap; overflow-x: auto; padding: 4px 0 6px; scrollbar-width: none; }
+  /* the conversation: as tall as it needs to be, never more than half the screen; messages scroll inside */
+  .chat { flex: 0 1 auto; min-height: 0; max-height: 56%; padding: 4px 0 14px; }
+  .card { flex: 1 1 auto; min-height: 0; padding: 16px 16px 14px; gap: 10px; }
+  .messages { flex: 1 1 auto; min-height: 52px; }
+  .bubble { padding: 12px 15px; }
+  .chips { flex-wrap: nowrap; overflow-x: auto; padding: 2px 0 4px; scrollbar-width: none; }
   .chips::-webkit-scrollbar { display: none; }
   .chips button { flex: none; padding: 9px 14px; }
-  .composer { min-height: 62px; padding: 7px 7px 7px 18px; }
-  .composer textarea { padding: 12px 0; height: 48px; line-height: 24px; }
-  .send { height: 48px; padding: 0 18px; }
+  .composer { min-height: 58px; padding: 6px 6px 6px 18px; }
+  .composer textarea { padding: 11px 0; height: 46px; line-height: 24px; font-size: 15px; }
+  .send { height: 46px; padding: 0 16px; }
   .options { grid-template-columns: 1fr; }
   .build .name { max-width: 100%; }
   .device.mobile iframe { width: 100%; border-width: 0; border-radius: 18px; }
-  .preview-bar { flex-wrap: wrap; gap: 8px 14px; }
-  .preview-title { flex: 1 1 100%; }
-  .preview-actions { gap: 6px; }
-  .preview-actions button { padding: 7px 8px; letter-spacing: .18em; }
-  .chat { padding-bottom: 24px; }
+  .preview-bar { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 0; padding: 0 0 8px; gap: 4px; }
+  .preview-title { padding-left: 56px; min-height: 36px; }
+  .preview-title span { min-width: 0; }
+  .preview-actions { width: 100%; justify-content: space-between; gap: 2px; }
+  .preview-actions button { padding: 6px 4px; letter-spacing: .16em; }
 }
