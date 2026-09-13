@@ -159,16 +159,22 @@ function setState(s) {
 const voice = new Voice(head, $('#say'), () => HEAD[stage.dataset.state] || HeadState.IDLE);
 const say = (text) => voice.say(text);
 
-// sound: the head's lines are always shown; whether they are also spoken is remembered
+// sound: the head's lines are always shown; whether they are also spoken is remembered.
+// The control names the action (MUTE / UNMUTE), and reads TAP FOR SOUND while a line waits for
+// the first click or key, which browsers require before any page may play audio.
 const soundBtn = $('#sound-toggle');
-let soundPref = true;
-try { soundPref = localStorage.getItem('nexova.sound') !== 'off'; } catch { /* ignore */ }
+let waiting = false;
+function soundLabel() { soundBtn.textContent = waiting ? 'TAP FOR SOUND' : voice.sound ? 'MUTE' : 'UNMUTE'; }
 function applySound(on) {
   voice.sound = on;
-  soundBtn.textContent = on ? 'SOUND ON' : 'SOUND OFF';
-  try { localStorage.setItem('nexova.sound', on ? 'on' : 'off'); } catch { /* ignore */ }
+  if (!on) voice.stop();
+  try { localStorage.setItem('nexova.mute', on ? '' : '1'); } catch { /* ignore */ }
+  soundLabel();
 }
-applySound(soundPref);
+voice.onBlocked = (w) => { waiting = w; soundLabel(); };
+let muted = false;
+try { muted = localStorage.getItem('nexova.mute') === '1'; } catch { /* ignore */ }
+applySound(!muted);
 soundBtn.addEventListener('click', () => applySound(!voice.sound));
 
 // the pill wears the state: ONLINE (or OFFLINE MODE / NO API) at rest, the beat while it builds, LIVE when the store is up

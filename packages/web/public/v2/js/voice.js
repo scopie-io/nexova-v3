@@ -10,6 +10,8 @@
 // The words follow the audio's progress, and with the browser engine its word boundaries.
 // Browsers only play audio after the first click or key, so a line said before that is read
 // out silently and voiced on the first interaction if it is still the one on screen.
+// The clips play through a plain <audio> element on purpose: routing it through Web Audio
+// leaves it silent wherever the context cannot start (iOS, Safari, a suspended Chromium).
 
 import { HeadState } from './head.js';
 
@@ -35,13 +37,10 @@ export class Voice {
     this._current = null;        // { token, pending } while a line is up
     this._audio = new Audio();
     this._audio.preload = 'auto';
-    this._ctx = null; this._analyser = null; this._data = null;
+    this.onBlocked = null;       // (waiting: boolean) => void — a line is waiting for the first interaction
 
     // the first interaction unlocks audio: voice the line that is still on screen, if any
-    const unlock = () => {
-      if (this._ctx?.state === 'suspended') this._ctx.resume().catch(() => {});
-      if (this._current?.pending) this._current.pending();
-    };
+    const unlock = () => { if (this._current?.pending) this._current.pending(); };
     window.addEventListener('pointerdown', unlock, { passive: true });
     window.addEventListener('keydown', unlock);
   }
@@ -162,30 +161,25 @@ export class Voice {
     const play = async () => {
       if (token !== this._token) return;
       audio.src = url;
+      audio.volume = 1;
+      audio.muted = false;
       audio.onended = () => { URL.revokeObjectURL(url); h.finish(); h.rest(); };
       audio.onerror = () => { URL.revokeObjectURL(url); h.finish(); h.rest(); };
       await audio.play(); // rejects while autoplay is still blocked: nothing below runs then
       if (token !== this._token) { audio.pause(); return; }
+      this.onBlocked?.(false);
       h.onVoiced();
       h.audio = true;
-      // the real amplitude, once the page has been interacted with (a context made earlier stays silent)
-      if (navigator.userActivation?.hasBeenActive !== false) this._graph();
-      if (this._ctx?.state === 'suspended') this._ctx.resume().catch(() => {});
       this.head.setState(HeadState.SPEAKING); // a late (unlocked) playback brings it back from rest
       const t0 = performance.now();
       const loop = (now) => {
         if (token !== this._token) return;
-        if (this._analyser) {
-          this._analyser.getByteFrequencyData(this._data);
-          let sum = 0;
-          for (const v of this._data) sum += v;
-          this.head.setAudioLevel(Math.min(1, (sum / this._data.length / 255) * 2.2));
-        } else {
-          const s = (now - t0) / 1000;
-          this.head.setAudioLevel(0.3 + 0.25 * Math.abs(Math.sin(s * 9.3)) + 0.2 * Math.abs(Math.sin(s * 23.7)));
-        }
-        // the words follow the voice, a beat ahead so a word is on screen as it is heard
+        // the visor moves with the voice: a lively envelope, quiet in the clip's silences
         const from = timing?.start ?? 0, to = timing?.end ?? audio.duration;
+        const inSpeech = audio.currentTime >= from - 0.05 && audio.currentTime <= to + 0.05;
+        const s = (now - t0) / 1000;
+        this.head.setAudioLevel(inSpeech ? 0.3 + 0.25 * Math.abs(Math.sin(s * 9.3)) + 0.2 * Math.abs(Math.sin(s * 23.7)) : 0.05);
+        // the words follow the voice, a beat ahead so a word is on screen as it is heard
         if (to > from) h.reveal(Math.floor(text.length * Math.min(1, Math.max(0, audio.currentTime + 0.22 - from) / (to - from))));
         this._raf = requestAnimationFrame(loop);
       };
@@ -197,23 +191,11 @@ export class Voice {
     } catch {
       // autoplay is blocked until the first click or key: read it out now, voice it then if still on screen
       h.typewriter();
-      if (this._current?.token === token) this._current.pending = () => { this._current.pending = null; play().catch(() => {}); };
+      if (this._current?.token === token) {
+        this._current.pending = () => { this._current.pending = null; play().catch(() => {}); };
+        this.onBlocked?.(true);
+      }
     }
-  }
-  _graph() {
-    if (this._ctx) return;
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
-    try {
-      this._ctx = new AC();
-      const src = this._ctx.createMediaElementSource(this._audio);
-      this._analyser = this._ctx.createAnalyser();
-      this._analyser.fftSize = 256;
-      this._analyser.smoothingTimeConstant = 0.7;
-      src.connect(this._analyser);
-      this._analyser.connect(this._ctx.destination);
-      this._data = new Uint8Array(this._analyser.frequencyBinCount);
-    } catch { this._ctx = null; }
   }
 
   // ---- the browser's own voice ----
@@ -254,6 +236,7 @@ export class Voice {
     this._token++;
     cancelAnimationFrame(this._raf);
     this._raf = 0;
+    if (this._current?.pending) this.onBlocked?.(false);
     this._current = null;
     try { this._audio.pause(); } catch { /* ignore */ }
     if (this._u) { try { speechSynthesis.cancel(); } catch { /* ignore */ } this._u = null; }
