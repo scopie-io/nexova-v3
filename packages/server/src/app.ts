@@ -13,6 +13,7 @@
  *   POST /api/tts                    -> NEXOVA AI's voice for one line (Qwen TTS, cached; 503 without QWEN_API_KEY)
  *   GET  /s/:slug/*                  -> live store: served from disk locally, redirected to its host otherwise
  *   GET  /*                          -> web app when a dist folder is given (local); the host serves it otherwise
+ *                                       (/ is NEXOVA AI, /classic/ the classic builder; /v2 redirects home)
  *
  * Jobs run through a JobLauncher: in-process on the local server, as Workflow runs on Vercel.
  */
@@ -366,6 +367,7 @@ export function createApp(opts: AppOptions): Hono {
     const webDist = opts.webDist;
     app.get("/*", async (c) => {
       const rel = decodeURIComponent(c.req.path.replace(/^\//, "")) || "index.html";
+      if (rel === "v2" || rel === "v2/") return c.redirect("/"); // NEXOVA AI moved from /v2/ to the home
       const res = await sendFile(webDist, rel);
       if (res) return res;
       return c.html(`<!doctype html><meta charset="utf-8"><title>Nexova</title><body style="font-family:system-ui;padding:40px;max-width:720px"><h1>Nexova API is running</h1><p>The web app is not built yet. Run <code>npm run build -w @nexova/web</code>, or start the web dev server with <code>npm run dev -w @nexova/web</code>.</p><p>API: <a href="/api/health">/api/health</a></p></body>`);

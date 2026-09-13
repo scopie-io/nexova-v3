@@ -2,7 +2,7 @@
 //
 // Paste a TikTok Shop / Shopee link (or product lines, or screenshots)  →  POST /api/jobs  →
 // SSE progress drives the head, the THINK → DESIGN → BUILD → LIVE beats and the conversation
-// →  the finished store renders live in the stage. Same API the classic home at / uses.
+// →  the finished store renders live in the stage. Same API the classic builder at /classic/ uses.
 
 import { Head, HeadState } from './head.js';
 import { Voice } from './voice.js';
@@ -383,7 +383,7 @@ function attach(job, bubble) {
   detach();
   const r = { job, bubble, progress: {}, found: null, coverage: null, beat: null, done: false, earlyPreview: false };
   run = r;
-  history.replaceState(null, '', `/v2/?job=${encodeURIComponent(job.id)}`);
+  history.replaceState(null, '', `${location.pathname}?job=${encodeURIComponent(job.id)}`);
   setBusy(true);
   applyBeat(r, beatOf(job));
   renderRun(r);
@@ -665,5 +665,5 @@ if (resumeId) {
   api.job(resumeId).then((job) => {
     addMessage('user').innerHTML = esc(job.input?.raw || '').replace(/\n/g, '<br>') || 'Screenshots';
     attach(job, addMessage('ai'));
-  }).catch(() => history.replaceState(null, '', '/v2/'));
+  }).catch(() => history.replaceState(null, '', location.pathname));
 }

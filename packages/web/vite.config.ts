@@ -11,5 +11,6 @@ export default defineConfig({
       "^/s/": { target: "http://localhost:4000", changeOrigin: true },
     },
   },
-  build: { outDir: "dist", emptyOutDir: true },
+  // NEXOVA AI (public/index.html, a static page) is the home; the classic builder is built under /classic/
+  build: { outDir: "dist", emptyOutDir: true, rollupOptions: { input: { classic: "classic/index.html" } } },
 });
