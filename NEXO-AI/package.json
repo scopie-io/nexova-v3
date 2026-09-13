@@ -1,0 +1,20 @@
+{
+  "name": "nexo-ai",
+  "version": "1.0.0",
+  "description": "NEXO.AI — Nexova's AI website partner. Idea to website, in real time. A JARVIS-style brain powered by Qwen.",
+  "type": "module",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node --watch server/server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "openai": "^7.15.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

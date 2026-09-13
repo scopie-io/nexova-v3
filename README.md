@@ -25,6 +25,7 @@ Once built, `npm start` alone is enough. One process serves three things:
 | URL | What |
 |---|---|
 | `http://localhost:4000` | The Nexova app (paste links, watch the build) |
+| `http://localhost:4000/v2/` | NEXOVA AI: the head interface to the same engine (paste links, watch the beats, the store renders live in the stage). Design references in `packages/web/design/` |
 | `http://localhost:4000/s/<slug>/` | Every store you generate |
 | `http://localhost:4000/api/...` | The JSON API (`/api/health`, `/api/stores`, `/api/usage`) |
 
@@ -78,6 +79,8 @@ node scripts/capture.mjs "https://shopee.com.my/yourshop" shot.png
 | `ANTHROPIC_API_KEY` | – | Required for Claude. Without it: offline mode (heuristics only) |
 | `NEXOVA_MODEL` | `claude-opus-5` | Model for research / normalization / enrichment |
 | `NEXOVA_EFFORT` | `high` | `low` … `max`; controls thinking depth and cost |
+| `QWEN_API_KEY` | – | NEXOVA AI's voice on `/v2/` (Qwen3-TTS via DashScope). Without it the head talks with the browser's own voice |
+| `NEXO_VOICE` | `Ethan` | Which Qwen voice: Ethan, Cherry, Serena, Chelsie, Neil, Dylan, Marcus, Ryan, Jennifer, Elias |
 | `NEXOVA_FALLBACKS` | `default` | Server-side refusal fallback: `default`, a model id, or `off` |
 | `NEXOVA_MAX_PRODUCTS` | `60` | Cap on products per store |
 | `NEXOVA_CACHE_TTL_HOURS` | `24` | Source extraction cache |

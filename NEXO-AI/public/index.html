@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO.AI — Nexova · Idea to website, in real time</title>
+<meta name="description" content="NEXOVA AI — your website partner. Idea to website, in real time.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@300;400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/styles.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+  <div class="bg" aria-hidden="true"></div>
+
+  <!-- ===== header ===== -->
+  <header class="top">
+    <div class="brand">
+      <span class="wordmark">NEXOVA</span>
+      <span class="tagline">IDEA TO WEBSITE. IN REAL TIME.</span>
+    </div>
+    <div class="top-right">
+      <span class="live" id="live"><i></i><b>LIVE</b></span>
+      <span class="sep">|</span>
+      <span class="os">AI CREATIVE OS</span>
+    </div>
+  </header>
+
+  <!-- ===== hero ===== -->
+  <main class="hero">
+    <!-- left: the stage — helmet, status steps, live build preview -->
+    <section class="stage" id="stage" data-state="idle">
+      <ul class="steps" id="steps" aria-label="NEXO status">
+        <li data-step="thinking">THINKING</li>
+        <li data-step="designing">DESIGNING</li>
+        <li data-step="building">BUILDING</li>
+        <li data-step="live">IN REAL TIME</li>
+      </ul>
+
+      <div class="callout" id="callout">
+        <div class="callout-name">NEXOVA AI</div>
+        <div class="callout-status"><i></i><span id="callout-text">ONLINE</span></div>
+        <svg class="leader" viewBox="0 0 90 60" aria-hidden="true">
+          <polyline points="6,9 34,9 82,54"></polyline>
+        </svg>
+        <div class="thought" id="thought" aria-live="polite"></div>
+      </div>
+
+      <div class="helmet-wrap" id="helmet">
+        <canvas id="holo" aria-label="NEXOVA AI hologram"></canvas>
+      </div>
+
+      <!-- live build preview: the helmet steps aside and the page renders here -->
+      <div class="preview" id="preview" hidden>
+        <div class="preview-bar">
+          <span class="preview-title"><i></i><span id="preview-name">LIVE BUILD</span></span>
+          <div class="preview-actions">
+            <button type="button" id="pv-desktop" class="on">DESKTOP</button>
+            <button type="button" id="pv-mobile">MOBILE</button>
+            <button type="button" id="pv-open">OPEN ↗</button>
+            <button type="button" id="pv-close">◉ HELMET</button>
+          </div>
+        </div>
+        <div class="device" id="device">
+          <iframe id="pv-frame" sandbox="allow-scripts allow-forms allow-popups" title="Live build preview"></iframe>
+        </div>
+      </div>
+    </section>
+
+    <!-- right: the conversation -->
+    <section class="chat">
+      <div class="card" id="card">
+        <div class="card-head">
+          <span class="dot" id="card-dot"></span>
+          <div>
+            <div class="card-title">NEXOVA AI</div>
+            <div class="card-sub">YOUR WEBSITE PARTNER</div>
+          </div>
+          <button type="button" class="voice-toggle" id="voice" title="Speak replies aloud (NEXO's voice)">VOICE OFF</button>
+        </div>
+        <div class="messages" id="messages"></div>
+      </div>
+
+      <div class="chips" id="chips"></div>
+
+      <form class="composer" id="composer" autocomplete="off">
+        <button type="button" class="mic" id="mic" title="Tap to talk" aria-label="Voice input">
+          <svg viewBox="0 0 34 26" aria-hidden="true">
+            <rect x="1"  y="9"  width="2.6" height="8"  rx="1.3"></rect>
+            <rect x="8"  y="4"  width="2.6" height="18" rx="1.3"></rect>
+            <rect x="15" y="1"  width="2.6" height="24" rx="1.3"></rect>
+            <rect x="22" y="6"  width="2.6" height="14" rx="1.3"></rect>
+            <rect x="29" y="10" width="2.6" height="6"  rx="1.3"></rect>
+          </svg>
+        </button>
+        <span class="caret" aria-hidden="true"></span>
+        <input id="input" type="text" placeholder="Ask or tell me what to build..." aria-label="Ask or tell me what to build">
+        <button type="submit" class="send" id="send" title="Send" aria-label="Send">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"></path>
+          </svg>
+        </button>
+      </form>
+    </section>
+  </main>
+
+  <!-- ===== footer ===== -->
+  <footer class="foot">
+    <div class="foot-left">WEBSITES<br>BRANDS<br>BEYOND</div>
+    <div class="foot-right">
+      <span class="rule"></span>
+      <div>BUILT WITH AI<br>FOR A BRIGHTER TOMORROW</div>
+    </div>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>
