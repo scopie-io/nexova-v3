@@ -1,0 +1,16 @@
+# Keeps `vercel deploy` from the repo root from uploading secrets and local build output.
+# The CLI ignores .env.local but not .env, so list every env file explicitly.
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Local pipeline state and generated stores
+data/
+stores/
+.workflow-data/
+.output/
+**/dist/
+**/.next/

@@ -9,7 +9,7 @@ Ordered by priority. Each item is small enough to finish in one sitting unless m
 - [x] **Restore TikTok Shop API quota.** The RapidAPI BASIC plan's monthly quota is exhausted. Upgrade the plan or wait for the reset. Until then, TikTok Shop links fall back to scraping and return almost nothing.
 - [x] **Run one real end-to-end build** with the Goli store: live with 52 products, photos, profile, coverage 90%, USD 2.32 / 11 credits.
 - [ ] **Run a build with a Malaysian shop** so the `MY` region path and MYR currency are exercised.
-- [ ] **Rotate the RapidAPI key.** It was pasted into chat and into an MCP config. Generate a new one in RapidAPI, update `.env` and the `tiktok-shop-api` MCP entry.
+- [x] ~~**Rotate the RapidAPI key.**~~ Decided not to rotate (2026-09-14).
 - [ ] **Decide the default region order** (`NEXOVA_TIKTOK_SHOP_REGIONS`, currently `MY,SG,US`). Each miss costs a credit. See PRD open question 1.
 
 ## Next (make the generated store worth showing)
@@ -32,6 +32,9 @@ Ordered by priority. Each item is small enough to finish in one sitting unless m
 
 ## Later (product scope from the PRD)
 
+> Superseded by [`SAAS_PLAN.md`](SAAS_PLAN.md) (2026-09-14): accounts, dashboard, inventory, orders, payments,
+> sync and billing are now phased there. Items below stay for history.
+
 - [ ] **Inventory and copy editor** in the web app, on top of the existing `PUT /api/stores/:slug/spec` and product endpoints.
 - [ ] **Custom domains and a hosted deploy target** beyond local and Netlify.
 - [ ] **Shopee catalog via a paid API**, the same way as TikTok Shop, since Shopee's public endpoints are heavily rate-limited.
@@ -41,6 +44,6 @@ Ordered by priority. Each item is small enough to finish in one sitting unless m
 ## Housekeeping
 
 - [ ] Add a `CLAUDE.md` so future sessions know the build, test, and doctor commands and the credit-cost rule for the TikTok Shop API.
-- [ ] Add a GitHub Actions workflow: typecheck, engine tests, build, on every push.
+- [x] Add a GitHub Actions workflow: typecheck, engine tests, build, on every push. (`.github/workflows/ci.yml`, with the app and database jobs)
 - [ ] Decide whether `.mcp.json` should be committed with `${RAPIDAPI_KEY}` so teammates get the MCP server without the key in git.
 - [ ] Remove `install-autostart.cmd` and `start.cmd` from the README's top billing if the primary target is no longer a merchant's Windows PC (PRD open question 4).

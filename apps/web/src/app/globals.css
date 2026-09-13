@@ -1,0 +1,137 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-satoshi), "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-heading: var(--font-sans);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* Nexova brand, matching nexova.my: slate ink #455263, teal #5fc7cd, deep teal #257e84. */
+:root {
+  --brand: #5fc7cd;
+  --brand-ink: #257e84;
+  --background: #ffffff;
+  --foreground: #26313d;
+  --card: #ffffff;
+  --card-foreground: #26313d;
+  --popover: #ffffff;
+  --popover-foreground: #26313d;
+  --primary: #455263;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f6f7;
+  --secondary-foreground: #26313d;
+  --muted: #f4f8f9;
+  --muted-foreground: #6b7886;
+  --accent: #e3f5f6;
+  --accent-foreground: #1f6f74;
+  --destructive: #dc2626;
+  --border: #e2e8f0;
+  --input: #dbe3ea;
+  --ring: #5fc7cd;
+  --chart-1: #5fc7cd;
+  --chart-2: #257e84;
+  --chart-3: #455263;
+  --chart-4: #94a3b8;
+  --chart-5: #ffce33;
+  --radius: 0.625rem;
+  --sidebar: #f8fafc;
+  --sidebar-foreground: #26313d;
+  --sidebar-primary: #455263;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e3f5f6;
+  --sidebar-accent-foreground: #1f6f74;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #5fc7cd;
+}
+
+.dark {
+  --brand: #6fd3d8;
+  --brand-ink: #86dde1;
+  --background: #0e1518;
+  --foreground: #e3ebee;
+  --card: #152025;
+  --card-foreground: #e3ebee;
+  --popover: #152025;
+  --popover-foreground: #e3ebee;
+  --primary: #e3ebee;
+  --primary-foreground: #152025;
+  --secondary: #1c2a30;
+  --secondary-foreground: #e3ebee;
+  --muted: #1c2a30;
+  --muted-foreground: #8a9aa2;
+  --accent: #16343a;
+  --accent-foreground: #86dde1;
+  --destructive: #f87171;
+  --border: #26363d;
+  --input: #2c3d44;
+  --ring: #6fd3d8;
+  --chart-1: #6fd3d8;
+  --chart-2: #86dde1;
+  --chart-3: #b9c6cc;
+  --chart-4: #64748b;
+  --chart-5: #facc15;
+  --sidebar: #121b1f;
+  --sidebar-foreground: #e3ebee;
+  --sidebar-primary: #6fd3d8;
+  --sidebar-primary-foreground: #0e1518;
+  --sidebar-accent: #16343a;
+  --sidebar-accent-foreground: #86dde1;
+  --sidebar-border: #26363d;
+  --sidebar-ring: #6fd3d8;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
