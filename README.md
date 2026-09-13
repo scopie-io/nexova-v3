@@ -24,7 +24,8 @@ Once built, `npm start` alone is enough. One process serves three things:
 
 | URL | What |
 |---|---|
-| `http://localhost:4000` | The Nexova app (paste links, watch the build) |
+| `http://localhost:4000` | NEXOVA AI: paste your TikTok Shop or Shopee link, the head builds and presents your store live. Design references in `packages/web/design/` |
+| `http://localhost:4000/classic/` | The classic builder (the previous home: same engine, form-style) |
 | `http://localhost:4000/s/<slug>/` | Every store you generate |
 | `http://localhost:4000/api/...` | The JSON API (`/api/health`, `/api/stores`, `/api/usage`) |
 
@@ -38,7 +39,7 @@ Stop it with Ctrl+C. Your stores live in `stores/` and survive restarts.
 
 Your Anthropic key lives in `.env`, which is gitignored. Without it the engine still runs, but in offline heuristic mode: no web research, no screenshot reading, and weaker copy.
 
-Open http://localhost:4000, paste links, drop in screenshots of your shop pages (drag & drop, click, or Ctrl+V), click **Build my store**. The store is published at `http://localhost:4000/s/<slug>/`. A coverage report tells you what was read from each channel and what would make it more accurate.
+Open http://localhost:4000, paste your links (screenshots by drag & drop, Ctrl+V or the ADD SCREENSHOTS chip), press **BUILD**. The classic form at `/classic/` does the same. The store is published at `http://localhost:4000/s/<slug>/`. A coverage report tells you what was read from each channel and what would make it more accurate.
 
 CLI (same engine):
 
@@ -65,7 +66,7 @@ node scripts/capture.mjs "https://shopee.com.my/yourshop" shot.png
 |---|---|
 | `packages/engine` | `@nexova/engine`: the whole pipeline, Claude gateway, template registry, generators, job store, usage ledger, CLI |
 | `packages/server` | Hono HTTP API + SSE progress + static hosting of live stores and the web app |
-| `packages/web` | The Nexova web app (paste links → watch the build → open the live store) |
+| `packages/web` | The web app: NEXOVA AI home (`public/index.html` + `public/v2/`), the classic builder (`classic/`, React) |
 | `templates/` | React storefront templates. Drop the 10 templates here; each needs `nexova.template.json` (see `docs/TEMPLATE_CONTRACT.md`). `nexova-starter` is the reference implementation |
 | `stores/<slug>/` | Generated stores: `store.json` (source of truth), `assets/`, `site/` (composed source), `live/` (published build) |
 | `data/` | Jobs and artifacts (`data/jobs/<id>/`), source cache, `usage/ledger.jsonl` |
@@ -78,6 +79,8 @@ node scripts/capture.mjs "https://shopee.com.my/yourshop" shot.png
 | `ANTHROPIC_API_KEY` | – | Required for Claude. Without it: offline mode (heuristics only) |
 | `NEXOVA_MODEL` | `claude-opus-5` | Model for research / normalization / enrichment |
 | `NEXOVA_EFFORT` | `high` | `low` … `max`; controls thinking depth and cost |
+| `QWEN_API_KEY` | – | NEXOVA AI's voice for lines without a recorded clip (Qwen3-TTS via DashScope); the 14 fixed lines ship recorded |
+| `NEXO_VOICE` | `Ethan` | Which Qwen voice: Ethan, Cherry, Serena, Chelsie, Neil, Dylan, Marcus, Ryan, Jennifer, Elias |
 | `NEXOVA_FALLBACKS` | `default` | Server-side refusal fallback: `default`, a model id, or `off` |
 | `NEXOVA_MAX_PRODUCTS` | `60` | Cap on products per store |
 | `NEXOVA_CACHE_TTL_HOURS` | `24` | Source extraction cache |

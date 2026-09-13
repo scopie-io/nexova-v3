@@ -30,9 +30,30 @@ export async function readJsonOrNull<T = unknown>(p: string): Promise<T | null> 
 /** Atomic JSON write: write to a temp file in the same dir, then rename. */
 export async function writeJson(p: string, data: unknown, pretty = true): Promise<void> {
   await ensureDir(path.dirname(p));
-  const tmp = `${p}.${process.pid}.${Date.now()}.tmp`;
+  const tmp = `${p}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
   await fs.writeFile(tmp, pretty ? JSON.stringify(data, null, 2) : JSON.stringify(data), "utf8");
-  await fs.rename(tmp, p);
+  await renameOverOpen(tmp, p);
+}
+
+/**
+ * On Windows, replacing a file that another handle has open at that instant (the API reading
+ * job.json while the pipeline saves it) fails with EPERM/EBUSY. The window is a few ms, so retry
+ * briefly instead of failing the whole job; any other error, or a persistent one, still throws.
+ */
+async function renameOverOpen(from: string, to: string, attempts = 12): Promise<void> {
+  for (let i = 0; ; i++) {
+    try {
+      await fs.rename(from, to);
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if ((code !== "EPERM" && code !== "EBUSY" && code !== "EACCES") || i >= attempts - 1) {
+        await fs.rm(from, { force: true }).catch(() => {});
+        throw err;
+      }
+      await new Promise((r) => setTimeout(r, 10 * (i + 1)));
+    }
+  }
 }
 
 export async function writeText(p: string, text: string): Promise<void> {

@@ -49,7 +49,7 @@ export default function App() {
         <BuildView
           job={job}
           onNew={() => {
-            window.history.replaceState(null, "", "/");
+            window.history.replaceState(null, "", window.location.pathname);
             setJob(null);
           }}
           onRebuild={async (slug, templateId) => setJob(await api.rebuild(slug, templateId))}

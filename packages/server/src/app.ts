@@ -10,8 +10,10 @@
  *   PATCH/POST/DELETE /api/stores/:slug/products[/:id]  -> inventory edits (CMS seam)
  *   POST /api/stores/:slug/rebuild
  *   GET  /api/templates, /api/usage, /api/health
+ *   POST /api/tts                    -> NEXOVA AI's voice for one line (Qwen TTS, cached; 503 without QWEN_API_KEY)
  *   GET  /s/:slug/*                  -> live store: served from disk locally, redirected to its host otherwise
  *   GET  /*                          -> web app when a dist folder is given (local); the host serves it otherwise
+ *                                       (/ is NEXOVA AI, /classic/ the classic builder; /v2 redirects home)
  *
  * Jobs run through a JobLauncher: in-process on the local server, as Workflow runs on Vercel.
  */
@@ -21,6 +23,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import { appDeepLinkToWeb, liveDirFor, parseStoreSpec, SHOPEE_SHORT_HOST, type Engine, type IncomingFile, type JobEvent, type JobOptions, type JobRecord } from "@nexova/engine";
+import { synthesize, TtsError, ttsConfigFromEnv } from "./tts.js";
 
 export interface JobLauncher {
   id: string;
@@ -59,6 +62,9 @@ const MIME: Record<string, string> = {
   ".txt": "text/plain; charset=utf-8",
   ".map": "application/json",
   ".webmanifest": "application/manifest+json",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".ogg": "audio/ogg",
 };
 
 async function sendFile(root: string, rel: string, spaFallback = true): Promise<Response | null> {
@@ -148,7 +154,22 @@ export function createApp(opts: AppOptions): Hono {
   app.get("/api/health", async (c) => {
     const templates = await engine.templates();
     const publisher = engine.deployer.check ? await engine.deployer.check().catch((err: unknown) => ({ ok: false, detail: err instanceof Error ? err.message : String(err) })) : { ok: true, detail: engine.deployer.id };
-    return c.json({ ok: true, model: engine.config.model, effort: engine.config.effort, offline: engine.config.offline, gateway: engine.gateway.id, deployer: engine.deployer.id, publisher, storage: engine.storage.id, runner: launcher.id, templates: templates.map((t) => t.manifest.id), publicUrl: engine.config.publicUrl, tiktokShopApi: !!engine.config.rapidApiKey });
+    return c.json({ ok: true, model: engine.config.model, effort: engine.config.effort, offline: engine.config.offline, gateway: engine.gateway.id, deployer: engine.deployer.id, publisher, storage: engine.storage.id, runner: launcher.id, templates: templates.map((t) => t.manifest.id), publicUrl: engine.config.publicUrl, tiktokShopApi: !!engine.config.rapidApiKey, voice: tts ? tts.voice : null });
+  });
+
+  // ---------- NEXOVA AI's voice ----------
+
+  const tts = ttsConfigFromEnv(process.env, engine.config.dataDir);
+  app.post("/api/tts", async (c) => {
+    if (!tts) return c.json({ error: "Voice is off: set QWEN_API_KEY in .env." }, 503);
+    const body = (await c.req.json().catch(() => ({}))) as { text?: string };
+    try {
+      const wav = await synthesize(tts, String(body.text ?? ""));
+      return new Response(new Uint8Array(wav), { status: 200, headers: { "content-type": "audio/wav", "cache-control": "private, max-age=86400" } });
+    } catch (err) {
+      const status = err instanceof TtsError ? err.status : 500;
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, status as 400);
+    }
   });
 
   /** Support tool: what does this host see when it resolves a TikTok link? Limited to tiktok.com hosts (no open proxy). */
@@ -346,6 +367,7 @@ export function createApp(opts: AppOptions): Hono {
     const webDist = opts.webDist;
     app.get("/*", async (c) => {
       const rel = decodeURIComponent(c.req.path.replace(/^\//, "")) || "index.html";
+      if (rel === "v2" || rel === "v2/") return c.redirect("/"); // NEXOVA AI moved from /v2/ to the home
       const res = await sendFile(webDist, rel);
       if (res) return res;
       return c.html(`<!doctype html><meta charset="utf-8"><title>Nexova</title><body style="font-family:system-ui;padding:40px;max-width:720px"><h1>Nexova API is running</h1><p>The web app is not built yet. Run <code>npm run build -w @nexova/web</code>, or start the web dev server with <code>npm run dev -w @nexova/web</code>.</p><p>API: <a href="/api/health">/api/health</a></p></body>`);
